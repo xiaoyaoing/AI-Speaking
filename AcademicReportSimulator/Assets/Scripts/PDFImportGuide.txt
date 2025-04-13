@@ -1,0 +1,27 @@
+# 在Unity中导入iTextSharp库的步骤
+
+1. 下载iTextSharp库：
+   - 访问 https://github.com/itext/itextsharp/releases 下载最新版本
+   - 或使用NuGet包管理器获取 `iTextSharp` 包
+   - 最小需要下载的文件是 `itextsharp.dll`
+
+2. 在Unity项目中创建Plugins文件夹：
+   - 在Unity编辑器中，右键点击Assets文件夹
+   - 选择 Create > Folder
+   - 命名为 "Plugins"
+
+3. 导入DLL文件：
+   - 将下载的 `itextsharp.dll` 拖拽到 Plugins 文件夹
+   - 确保导入设置中将兼容性设置为 ".NET 4.x"
+
+4. 配置项目.NET版本：
+   - 打开 Edit > Project Settings > Player
+   - 展开 Other Settings 部分
+   - 找到 "Api Compatibility Level"
+   - 设置为 ".NET 4.x"
+
+5. 相关依赖项：
+   - iTextSharp需要 System.Drawing.dll 
+   - 将此DLL文件也复制到Plugins文件夹
+
+完成上述步骤后，你应该能够在代码中使用iTextSharp库了。 

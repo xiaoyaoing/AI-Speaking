@@ -1,0 +1,22 @@
+fileFormatVersion: 2
+guid: 778beaba0eb13f944a9a25d52ebcfa27
+labels:
+- seat
+- furniture
+- simulation
+- seriousgames
+- visualisation
+- office
+- sofa
+- couch
+- officechair
+- chair
+- arcvis
+- boardroom
+- meeting
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

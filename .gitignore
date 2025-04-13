@@ -1,0 +1,32 @@
+# Unity 自动生成目录
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+
+# 项目设置文件
+/.vs/
+.gradle/
+.idea/
+*.sln
+*.csproj
+*.unityproj
+*.suo
+*.userprefs
+
+# 平台相关文件
+Assets/AssetStoreTools*
+Assets/Plugins/Editor/JetBrains*
+*.apk
+*.aab
+*.unitypackage
+
+# 忽略特定编辑器缓存（如 Rider）
+.idea/
+.vscode/
+
+# 忽略本地测试数据
+Assets/TestData/
