@@ -55,7 +55,12 @@ public class AcademicPresentationManager : MonoBehaviour
     [Header("状态")]
     [Tooltip("保存当前剩余时间(秒)")]
     public float currentTimeRemaining;
-    
+
+    [Tooltip("是否优先从后端加载音频")]
+    public bool loadAudioFromBackendFirst = true;
+
+[   Tooltip("音频加载超时时间(秒)")]
+    public float audioLoadTimeout = 20f;
     // 计时器协程
     private Coroutine timerCoroutine;
     
@@ -136,6 +141,8 @@ public class AcademicPresentationManager : MonoBehaviour
     [Tooltip("下一页按键")]
     public KeyCode nextSlideKey = KeyCode.C;
 
+    // public string apiUrl = "http://localhost:5001/gen_hello";
+
     // 幻灯片播放器引用
     private SlidePlayer slidePlayer;
     
@@ -174,7 +181,36 @@ public class AcademicPresentationManager : MonoBehaviour
             Debug.LogWarning($"无法加载默认音频: {defaultAudioPath}");
         }
     }
-    
+    // /// <summary>
+    // /// 在开始时加载音频
+    // /// </summary>  
+    // private void PlayIntroductionAudio()
+    // {
+        
+    //     AudioClip defaultClip = Resources.Load<AudioClip>(defaultAudioPath);
+    //     if (defaultClip != null)
+    //     {
+    //         // 如果已有音频列表，添加到列表中
+    //         if (questionAudioClips != null && questionAudioClips.Length > 0)
+    //         {
+    //             AudioClip[] newClips = new AudioClip[questionAudioClips.Length + 1];
+    //             questionAudioClips.CopyTo(newClips, 0);
+    //             newClips[questionAudioClips.Length] = defaultClip;
+    //             questionAudioClips = newClips;
+    //         }
+    //         else
+    //         {
+    //             // 创建新列表
+    //             questionAudioClips = new AudioClip[] { defaultClip };
+    //         }
+            
+    //         Debug.Log($"已加载音频");
+    //     }
+    //     else
+    //     {
+    //         Debug.LogWarning($"无法加载音频");
+    //     }
+    // }
     private void Start()
     {
         // 初始化
@@ -190,10 +226,12 @@ public class AcademicPresentationManager : MonoBehaviour
         
         // 设置初始UI状态
         UpdateUISettings();
-        
+
+        // // 播放场景介绍音频
+        // PlayIntroductionAudio();       
         // 加载默认音频
         LoadDefaultAudio();
-        
+
         // 设置初始语速
         currentSpeechRate = defaultSpeechRate;
         
@@ -210,13 +248,10 @@ public class AcademicPresentationManager : MonoBehaviour
             originalAudioPosition = questionAudioSource.transform.localPosition;
         }
         
-        // 播放场景介绍音频
-        PlayIntroductionAudio();
-        
         // 初始化幻灯片播放器
         InitializeSlidePlayer();
     }
-    
+
     /// <summary>
     /// 注册事件的默认处理函数
     /// </summary>

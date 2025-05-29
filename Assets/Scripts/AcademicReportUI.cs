@@ -1,14 +1,20 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityRandom = UnityEngine.Random;
 using UnityEngine.UI;
 using TMPro;
-
+using System.IO;
+using System;
+using UnityEngine.Networking;
+using System.Collections;
 /// <summary>
 /// 学术汇报UI控制器 - 管理汇报界面元素和交互，自动创建必要的UI组件
 /// </summary>
 public class AcademicReportUI : MonoBehaviour
 {
+    public static FileDataManager dataManager;
+
     [Header("计时器显示")]
     [Tooltip("计时器文本")]
     public TextMeshProUGUI timerText;
@@ -84,6 +90,8 @@ public class AcademicReportUI : MonoBehaviour
     // Canvas引用
     private Canvas canvas;
     
+    // 对应的txt文本内容
+    public string text = "";
     private void Awake()
     {
         // 如果设置了自动生成UI，则执行生成
@@ -91,13 +99,18 @@ public class AcademicReportUI : MonoBehaviour
         {
             GenerateUI();
         }
+
+        dataManager = FindObjectOfType<FileDataManager>();
+        if (dataManager == null)
+        {
+            Debug.LogError("FileDataManager 未找到！");
+        }
     }
     
     private void Start()
     {
         // 获取汇报管理器引用
         presentationManager = FindObjectOfType<AcademicPresentationManager>();
-        
         if (presentationManager == null)
         {
             Debug.LogError("AcademicPresentationManager not found!");
@@ -401,7 +414,97 @@ public class AcademicReportUI : MonoBehaviour
             }
         }
     }
+    private void StartQuestionPhase()
+    {
+        // 调用后端API获取问题
+        string apiUrl = "http://localhost:5001/gen_question"; // 你的Flask后端地址
+        if (dataManager == null) return;
+
+        
+        if (File.Exists(dataManager.GetFileData().txtPath))
+        {
+           string text = File.ReadAllText(dataManager.GetFileData().txtPath);
+        }
+        else{
+            text = "";
+        } 
+        Debug.Log("text"+text);
+
+        // 准备请求数据
+        var requestData = new {
+            speech_text = text, // 替换为实际演讲文本
+            n = 3 // 想要生成的问题数量
+        };
+        
+        string jsonData = JsonUtility.ToJson(requestData);
+        
+        // 创建并发送POST请求
+        using (UnityWebRequest webRequest = new UnityWebRequest(apiUrl, "POST"))
+        {
+            byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
+            webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            webRequest.downloadHandler = new DownloadHandlerBuffer();
+            webRequest.SetRequestHeader("Content-Type", "application/json");
+            
+            // 发送请求
+            webRequest.SendWebRequest();
+            
+            if (webRequest.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log("Received response: " + webRequest.downloadHandler.text);
+                
+                // 解析响应
+                QuestionResponse response = JsonUtility.FromJson<QuestionResponse>(webRequest.downloadHandler.text);
+                
+                // 处理问题和音频
+            if (!string.IsNullOrEmpty(response.audio))
+                {
+                    PlayBase64Audio(response.audio);
+                }
+                
+
+            }
+            else
+            {
+                Debug.LogError("Error: " + webRequest.error);
+            }
+        }
+    }
+    // 用于解析JSON响应的辅助类
+    [System.Serializable]
+    private class QuestionResponse
+    {
+        public string audio;
+        public string text;
+    }
+IEnumerator PlayBase64Audio(string base64Data)
+{
+    byte[] audioBytes = Convert.FromBase64String(base64Data);
     
+    // 创建临时文件
+    string tempPath = Path.Combine(Application.temporaryCachePath, "tempAudio.wav");
+    File.WriteAllBytes(tempPath, audioBytes);
+    
+    // 加载音频
+    using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip("file://" + tempPath, AudioType.WAV))
+    {
+        yield return www.SendWebRequest();
+        
+        if (www.result == UnityWebRequest.Result.Success)
+        {
+            AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
+            AudioSource.PlayClipAtPoint(clip, Camera.main.transform.position);
+        }
+        else
+        {
+            Debug.LogError("Audio load error: " + www.error);
+        }
+    }
+    
+    // 删除临时文件
+    File.Delete(tempPath);
+}
+
     /// <summary>
     /// 订阅事件
     /// </summary>
@@ -491,6 +594,7 @@ public class AcademicReportUI : MonoBehaviour
             presentationManager.StartQuestionPhase();
             Debug.Log("Question phase started");
             yield return null;
+            Debug.Log("Question phase started");
 
             // // 短暂延迟后自动触发第一个问题
             // Debug.Log("Waiting 1.5 seconds before first question...");
@@ -505,6 +609,7 @@ public class AcademicReportUI : MonoBehaviour
         
         Debug.Log("End presentation sequence completed");
     }
+    
     
     /// <summary>
     /// 更新计时器显示
@@ -566,7 +671,7 @@ public class AcademicReportUI : MonoBehaviour
             if (hasReachedPodium && isPresenting && !isQuestionPhase)
             {
                 // 生成随机语速 (0.8-1.2范围)
-                float randomRate = Random.Range(0.8f, 1.2f);
+                float randomRate = UnityRandom.Range(0.8f, 1.2f);
                 currentSpeechRate = randomRate;
                 UpdateSpeechRateText(randomRate);
                 
@@ -598,7 +703,7 @@ public class AcademicReportUI : MonoBehaviour
             }
             
             // 每2-4秒更新一次
-            yield return new WaitForSeconds(Random.Range(2f, 4f));
+            yield return new WaitForSeconds(UnityRandom.Range(2f, 4f));
         }
     }
     
