@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.Events;
 using System.IO;
 using UnityEngine.SceneManagement;
 
@@ -144,6 +145,12 @@ public class UploadPageSetup : MonoBehaviour
         serializedObject.FindProperty("txtPathText").objectReferenceValue = txtPathObj.GetComponent<Text>();
         serializedObject.FindProperty("statusText").objectReferenceValue = statusObj.GetComponent<Text>();
         serializedObject.FindProperty("backgroundImage").objectReferenceValue = bgImage;
+        
+        // 使用持久化的UnityEvent绑定按钮事件
+        UnityEditor.Events.UnityEventTools.AddPersistentListener(pptButton.onClick, uploadPage.SelectPptFile);
+        UnityEditor.Events.UnityEventTools.AddPersistentListener(txtButton.onClick, uploadPage.SelectTxtFile);
+        UnityEditor.Events.UnityEventTools.AddPersistentListener(startButton.onClick, uploadPage.StartProcess);
+        
         serializedObject.ApplyModifiedProperties();
 
         // 确保Resources/Backgrounds文件夹存在
