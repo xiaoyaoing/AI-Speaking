@@ -7,7 +7,7 @@
 [Ll]ogs/
 [Mm]emoryCaptures/
 
-/Assets/Citizens PRO
+#/Assets/Citizens PRO
 # 项目设置文件
 /.vs/
 .gradle/
