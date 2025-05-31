@@ -30,7 +30,7 @@
 ### 1. 预览模式 (推荐先运行)
 
 ```bash
-python delete_citizens_pro.py --dry-run
+python3 delete_citizens_pro.py --dry-run
 ```
 
 这会显示将要删除的文件，但不会实际删除任何内容。
@@ -38,23 +38,23 @@ python delete_citizens_pro.py --dry-run
 ### 2. 实际删除
 
 ```bash
-python delete_citizens_pro.py
+python3 delete_citizens_pro.py
 ```
 
 ### 3. 自定义保留比例
 
 ```bash
 # 保留50%的资源
-python delete_citizens_pro.py --keep-ratio 0.5
+python3 delete_citizens_pro.py --keep-ratio 0.5
 
 # 保留10%的资源  
-python delete_citizens_pro.py --keep-ratio 0.1
+python3 delete_citizens_pro.py --keep-ratio 0.1
 ```
 
 ### 4. 指定项目路径
 
 ```bash
-python delete_citizens_pro.py --base-path "D:/MyUnityProject"
+python3 delete_citizens_pro.py --base-path "D:/MyUnityProject"
 ```
 
 ## 命令行参数

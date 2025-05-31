@@ -116,6 +116,7 @@ public class AcademicReportUI : MonoBehaviour
             Debug.LogError("AcademicPresentationManager not found!");
             return;
         }
+        // StartQuestionPhase();
         
         // 添加音频源
         audioSource = GetComponent<AudioSource>();
@@ -414,96 +415,119 @@ public class AcademicReportUI : MonoBehaviour
             }
         }
     }
-    private void StartQuestionPhase()
-    {
-        // 调用后端API获取问题
-        string apiUrl = "http://localhost:5001/gen_question"; // 你的Flask后端地址
-        if (dataManager == null) return;
+//     private void StartQuestionPhase()
+//     {
+//     StartCoroutine(AskQuestionsRepeatedly());
+//     } 
 
-        
-        if (File.Exists(dataManager.GetFileData().txtPath))
-        {
-           string text = File.ReadAllText(dataManager.GetFileData().txtPath);
-        }
-        else{
-            text = "";
-        } 
-        Debug.Log("text"+text);
+//     private IEnumerator AskQuestionsRepeatedly()
+//     {
+//         int questionCount = 0;
+//         const int maxQuestions = 3;
+//         const float interval = 15f; // 15秒间隔
+//         while (questionCount < maxQuestions)
+//         {
+//             // 调用后端API获取问题
+//             string apiUrl = "http://localhost:5001/gen_question"; // 你的Flask后端地址
+//             if (dataManager == null||!dataManager) {
+//                 dataManager = new FileDataManager();
+//                 dataManager.SetFileData("/Users/dongaixuan/Desktop/样式组件问题.txt","/Users/dongaixuan/Desktop/temp.pptx");
+//                 // yield break;
+//                 }
 
-        // 准备请求数据
-        var requestData = new {
-            speech_text = text, // 替换为实际演讲文本
-            n = 3 // 想要生成的问题数量
-        };
+//             Debug.Log("dataManager.GetFileData().txtPath)"+dataManager.GetFileData().txtPath);
+
+//             if (File.Exists(dataManager.GetFileData().txtPath))
+//             {
+//             string text = File.ReadAllText(dataManager.GetFileData().txtPath);
+//             Debug.Log(text);
+//             }
+//             else{
+//                 text = "";
+//             } 
+//             Debug.Log("text"+text);
+
+//             // 准备请求数据
+//             var requestData = new {
+//                 speech_text = text, // 替换为实际演讲文本
+//                 n = 1 // 想要生成的问题数量
+//             };
         
-        string jsonData = JsonUtility.ToJson(requestData);
+//             string jsonData = JsonUtility.ToJson(requestData);
         
-        // 创建并发送POST请求
-        using (UnityWebRequest webRequest = new UnityWebRequest(apiUrl, "POST"))
-        {
-            byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
-            webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
-            webRequest.downloadHandler = new DownloadHandlerBuffer();
-            webRequest.SetRequestHeader("Content-Type", "application/json");
+//             // 创建并发送POST请求
+//             using (UnityWebRequest webRequest = new UnityWebRequest(apiUrl, "POST"))
+//             {
+//                 byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
+//                 webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+//                 webRequest.downloadHandler = new DownloadHandlerBuffer();
+//                 webRequest.SetRequestHeader("Content-Type", "application/json");
             
-            // 发送请求
-            webRequest.SendWebRequest();
-            
-            if (webRequest.result == UnityWebRequest.Result.Success)
-            {
-                Debug.Log("Received response: " + webRequest.downloadHandler.text);
+//                 // 发送请求
+//                 webRequest.SendWebRequest();
+//                 Debug.Log("webRequest.result = "+webRequest.result);
+//                 if (webRequest.result == UnityWebRequest.Result.Success)
+//                 {
+//                     Debug.Log("Received response: " + webRequest.downloadHandler.text);
                 
-                // 解析响应
-                QuestionResponse response = JsonUtility.FromJson<QuestionResponse>(webRequest.downloadHandler.text);
+//                     // 解析响应
+//                     QuestionResponse response = JsonUtility.FromJson<QuestionResponse>(webRequest.downloadHandler.text);
                 
-                // 处理问题和音频
-            if (!string.IsNullOrEmpty(response.audio))
-                {
-                    PlayBase64Audio(response.audio);
-                }
-                
+//                     // 处理问题和音频
+//                 if (!string.IsNullOrEmpty(response.audio))
+//                     {
+//                     PlayBase64Audio(response.audio);
+//                     }
+//                 questionCount++;
+//                 if (questionCount < maxQuestions)
+//                 {
+//                     Debug.Log($"Waiting {interval} seconds before next question...");
+//                     yield return new WaitForSeconds(interval);
+//                 }
 
-            }
-            else
-            {
-                Debug.LogError("Error: " + webRequest.error);
-            }
-        }
-    }
-    // 用于解析JSON响应的辅助类
-    [System.Serializable]
-    private class QuestionResponse
-    {
-        public string audio;
-        public string text;
-    }
-IEnumerator PlayBase64Audio(string base64Data)
-{
-    byte[] audioBytes = Convert.FromBase64String(base64Data);
+//                 }
+//                 else
+//                 {
+//                     Debug.LogError("Error: " + webRequest.error);
+//                     yield break;
+//                 }
+//             } }
+//               Debug.Log("Finished asking all questions");
+//     }
+//     // 用于解析JSON响应的辅助类
+//     [System.Serializable]
+//     private class QuestionResponse
+//     {
+//         public string audio;
+//         public string text;
+//     }
+// IEnumerator PlayBase64Audio(string base64Data)
+// {
+//     byte[] audioBytes = Convert.FromBase64String(base64Data);
     
-    // 创建临时文件
-    string tempPath = Path.Combine(Application.temporaryCachePath, "tempAudio.wav");
-    File.WriteAllBytes(tempPath, audioBytes);
+//     // 创建临时文件
+//     string tempPath = Path.Combine(Application.temporaryCachePath, "tempAudio.wav");
+//     File.WriteAllBytes(tempPath, audioBytes);
     
-    // 加载音频
-    using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip("file://" + tempPath, AudioType.WAV))
-    {
-        yield return www.SendWebRequest();
+//     // 加载音频
+//     using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip("file://" + tempPath, AudioType.WAV))
+//     {
+//         yield return www.SendWebRequest();
         
-        if (www.result == UnityWebRequest.Result.Success)
-        {
-            AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
-            AudioSource.PlayClipAtPoint(clip, Camera.main.transform.position);
-        }
-        else
-        {
-            Debug.LogError("Audio load error: " + www.error);
-        }
-    }
+//         if (www.result == UnityWebRequest.Result.Success)
+//         {
+//             AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
+//             AudioSource.PlayClipAtPoint(clip, Camera.main.transform.position);
+//         }
+//         else
+//         {
+//             Debug.LogError("Audio load error: " + www.error);
+//         }
+//     }
     
-    // 删除临时文件
-    File.Delete(tempPath);
-}
+//     // 删除临时文件
+//     File.Delete(tempPath);
+// }
 
     /// <summary>
     /// 订阅事件
@@ -592,9 +616,15 @@ IEnumerator PlayBase64Audio(string base64Data)
             //
             // 开始问答环节
             presentationManager.StartQuestionPhase();
-            Debug.Log("Question phase started");
+
+            Debug.Log("AcademicReportUI Question phase started");
             yield return null;
             Debug.Log("Question phase started");
+
+            // presentationManager.Judgephase();
+            // Debug.Log("Judge phase started");
+            // yield return null;
+            // Debug.Log("Judge phase started");
 
             // // 短暂延迟后自动触发第一个问题
             // Debug.Log("Waiting 1.5 seconds before first question...");

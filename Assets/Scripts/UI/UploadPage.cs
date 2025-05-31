@@ -251,7 +251,7 @@ public class UploadPage : MonoBehaviour
         }
 
         ProcessStartInfo startInfo = new ProcessStartInfo();
-        startInfo.FileName = "python";
+        startInfo.FileName = "python3";
         startInfo.Arguments = $"-u \"{pythonScript}\" \"{normalizedPptPath}\" \"{outputFolder}\"";
         startInfo.UseShellExecute = false;
         startInfo.RedirectStandardOutput = true;

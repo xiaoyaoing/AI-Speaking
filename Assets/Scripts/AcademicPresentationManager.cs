@@ -2,9 +2,15 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityRandom = UnityEngine.Random;
 using TMPro;
 using System;
+using System.IO;
 using UnityEngine.Events;
+using UnityEngine.Networking;
+// using NAudio.Wave;
+using System.Linq;
+// using System.Collections;
 
 /// <summary>
 /// 学术汇报管理器 - 控制整个学术汇报流程
@@ -24,8 +30,6 @@ public class AcademicPresentationManager : MonoBehaviour
     [Tooltip("问题音频文件列表")]
     public AudioClip[] questionAudioClips;
     
-    [Tooltip("默认音频路径")]
-    public string defaultAudioPath = "Audio/Questions/default";
     
     [Tooltip("当前问题内容描述")]
     public string currentQuestionContent = "";
@@ -63,7 +67,8 @@ public class AcademicPresentationManager : MonoBehaviour
     public float audioLoadTimeout = 20f;
     // 计时器协程
     private Coroutine timerCoroutine;
-    
+    public static FileDataManager dataManager;
+
     // 事件
     public UnityEvent onPresentationStart = new UnityEvent();
     public UnityEvent onPresentationEnd = new UnityEvent();
@@ -146,39 +151,13 @@ public class AcademicPresentationManager : MonoBehaviour
     // 幻灯片播放器引用
     private SlidePlayer slidePlayer;
     
-    /// <summary>
-    /// 在开始时加载默认音频
-    /// </summary>
-    private void LoadDefaultAudio()
+        private void Awake()
     {
-        if (string.IsNullOrEmpty(defaultAudioPath))
+
+        dataManager = FindObjectOfType<FileDataManager>();
+        if (dataManager == null)
         {
-            Debug.LogWarning("默认音频路径未设置！");
-            return;
-        }
-        
-        AudioClip defaultClip = Resources.Load<AudioClip>(defaultAudioPath);
-        if (defaultClip != null)
-        {
-            // 如果已有音频列表，添加到列表中
-            if (questionAudioClips != null && questionAudioClips.Length > 0)
-            {
-                AudioClip[] newClips = new AudioClip[questionAudioClips.Length + 1];
-                questionAudioClips.CopyTo(newClips, 0);
-                newClips[questionAudioClips.Length] = defaultClip;
-                questionAudioClips = newClips;
-            }
-            else
-            {
-                // 创建新列表
-                questionAudioClips = new AudioClip[] { defaultClip };
-            }
-            
-            Debug.Log($"已加载默认音频: {defaultAudioPath}");
-        }
-        else
-        {
-            Debug.LogWarning($"无法加载默认音频: {defaultAudioPath}");
+            Debug.LogError("FileDataManager 未找到！");
         }
     }
     // /// <summary>
@@ -227,10 +206,8 @@ public class AcademicPresentationManager : MonoBehaviour
         // 设置初始UI状态
         UpdateUISettings();
 
-        // // 播放场景介绍音频
-        // PlayIntroductionAudio();       
-        // 加载默认音频
-        LoadDefaultAudio();
+       // 播放场景介绍音频
+       PlayIntroductionAudio();       
 
         // 设置初始语速
         currentSpeechRate = defaultSpeechRate;
@@ -250,6 +227,7 @@ public class AcademicPresentationManager : MonoBehaviour
         
         // 初始化幻灯片播放器
         InitializeSlidePlayer();
+        
     }
 
     /// <summary>
@@ -311,6 +289,7 @@ public class AcademicPresentationManager : MonoBehaviour
             RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
             if (characterManager != null)
             {
+                Debug.Log("问答环节状态"); 
                 characterManager.HandleQuestionPhaseStart();
             }
             
@@ -351,14 +330,17 @@ public class AcademicPresentationManager : MonoBehaviour
             ResetPresentation();
         });
     }
-    
+
     /// <summary>
     /// 延迟触发第一个问题的协程
     /// </summary>
     private IEnumerator TriggerFirstQuestionAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
+        Debug.Log("已经进入");
         AskRandomQuestion();
+        // Judgespeech();
+        
     }
     
     /// <summary>
@@ -422,7 +404,7 @@ public class AcademicPresentationManager : MonoBehaviour
         
         Debug.Log($"开始学术汇报: {presentationTopic}，汇报人: {presenterName}，时间: {presentationTime}分钟");
     }
-    
+    private Coroutine questionRoutine;
     /// <summary>
     /// 结束汇报，开始问答阶段
     /// </summary>
@@ -430,23 +412,27 @@ public class AcademicPresentationManager : MonoBehaviour
     {
         // 获取RuntimeCharacterManager实例
         RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
-        
+
         // 检查当前状态，只有在演讲阶段才能进入问答阶段
         if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.Presenting)
         {
             return;
         }
-        
+
         // 先触发汇报结束事件，让观众鼓掌
         onPresentationEnd.Invoke();
-        
+
         // 设置为鼓掌阶段
         characterManager.HandlePresentationEnd();
-        
+
         // 等待鼓掌结束再进入问答阶段
         StartCoroutine(StartQuestionPhaseAfterApplause(3.0f));
-        
+
+        //随机提问
         AskRandomQuestion();
+
+        //对演讲内容进行评价
+        Judgespeech();
     }
     
     /// <summary>
@@ -495,6 +481,7 @@ public class AcademicPresentationManager : MonoBehaviour
     /// </summary>
     public void AskRandomQuestion()
     {
+        Debug.Log("已经进入AskRandomQuestion阶段");
         // 获取RuntimeCharacterManager实例
         RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
         
@@ -503,14 +490,13 @@ public class AcademicPresentationManager : MonoBehaviour
         {
             return;
         }
-        
+        Debug.Log("audienceManager: "+audienceManager);
         if (audienceManager != null)
         {
             // 使用AudienceManager的GetRandomQuestioner方法
             GameObject questioner = audienceManager.GetRandomQuestioner();
             
-            if (questioner != null)
-            {
+         
                 Debug.Log($"观众 {questioner.name} 正在提问...");
                 
                 // 设置当前提问者
@@ -531,13 +517,234 @@ public class AcademicPresentationManager : MonoBehaviour
                 
                 // 设置当前说话者
                 SetCurrentSpeaker(questioner);
-                
-                // 使用新的方法播放随机问题音频
-                PlayQuestionAudio(-1); // -1表示随机选择
-            }
+
+            // 使用新的方法播放随机问题音频
+            StartCoroutine(AskQuestionsRepeatedly()); // -1表示随机选择
+            
         }
     }
+       /// <summary>
+    /// 让随机观众评价
+    /// </summary>
+    public void Judgespeech()
+    {
+        Debug.Log("已经进入Judgespeech阶段");
+        // 获取RuntimeCharacterManager实例
+        RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
+        
+        // 检查是否在问答阶段
+        if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.QuestionTime) 
+        {
+            return;
+        }
+        Debug.Log("audienceManager: "+audienceManager);
+        if (audienceManager != null)
+        {
+            // 使用AudienceManager的GetRandomQuestioner方法
+            GameObject questioner = audienceManager.GetRandomQuestioner();
+            
+         
+                Debug.Log($"观众 {questioner.name} 正在评价...");
+                
+                // 设置当前提问者
+                if (characterManager != null)
+                {
+                    // 设置当前提问者
+                    characterManager.SetCurrentQuestioner(questioner);
+                    
+                    // 获取演讲者对象
+                    GameObject presenter = characterManager.GetPresenter();
+                    if (presenter != null)
+                    {
+                        // 使用RuntimeCharacterManager的方法让演讲者和提问者互相看向对方
+                        StartCoroutine(characterManager.RotatePresenterTowardsQuestioner(presenter, questioner));
+                        StartCoroutine(characterManager.RotateQuestionerTowardsPresenter(questioner, presenter));
+                    }
+                }
+                
+                // 设置当前说话者
+                SetCurrentSpeaker(questioner);
+
+            // 使用新的方法播放随机问题音频
+            StartCoroutine(Judge()); 
+        }
+    }
+
+    /// <summary>
+    /// 播放评价音频
+    /// </summary>
+    [System.Serializable]  // 必须添加此特性[System.Serializable] // 确保可被 Unity 的 JsonUtility 序列化
+    public class JudgeRequestData
+    {
+        public string speech_text; // 演讲文本
+        public string speaker_audio; // Base64 编码的 WAV 音频数据
+    }
+    private IEnumerator Judge()
+{
+        Debug.Log("进入了Judge");
+    // 获取RuntimeCharacterManager实例
+    RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
+    if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.QuestionTime) 
+    {
+        yield break;
+    }
+
+            // 如果没有当前说话者，尝试获取一个
+            if (currentSpeaker == null && audienceManager != null)
+            {
+                GameObject questioner = audienceManager.GetRandomQuestioner();
+                if (questioner != null)
+                {
+                    SetCurrentSpeaker(questioner);
+                }
+            }
+
+            // 调用后端API获取问题
+            string apiUrl = "http://127.0.0.1:5001/judge"; // 你的Flask后端地址
+            if (dataManager == null||!dataManager) {
+                dataManager = new FileDataManager();
+                dataManager.SetFileData("/Users/dongaixuan/Desktop/样式组件问题.txt","/Users/dongaixuan/Desktop/temp.pptx");
+                // yield break;
+                }
+
+            Debug.Log("dataManager.GetFileData().txtPath)"+dataManager.GetFileData().txtPath);
+            string text;
+            if (File.Exists(dataManager.GetFileData().txtPath))
+            {
+            text = File.ReadAllText(dataManager.GetFileData().txtPath);
+            Debug.Log(text);
+            }
+            else{
+                text = "";
+            } 
+            Debug.Log("text:"+text);
+
+        string audioFolderPath = @"Assets/Recordings";
+        string tempOutputPath = Path.Combine(Path.GetTempPath(), "output.wav");
+
+        // 获取文件夹中的所有WAV文件并按文件名排序
+        var audioFiles = Directory.GetFiles(audioFolderPath, "*.wav")
+                         .OrderBy(f => f)  // 按文件名排序
+                         .ToArray();
+
+        if (audioFiles.Length == 0)
+        {
+            // 如果没有文件，创建5秒静音
+            CreateSilentWavFile(tempOutputPath, 5);
+            Console.WriteLine("没有找到WAV文件，已创建空白音频");
+        }
+        else
+        {
+            // 获取最后一个文件
+            string lastAudioFile = audioFiles.Last();
+            Console.WriteLine($"使用最后一个音频文件: {lastAudioFile}");
     
+            // 直接复制最后一个文件到临时路径（或直接使用原文件）
+            File.Copy(lastAudioFile, tempOutputPath, overwrite: true);
+        }
+
+        Debug.Log("已经获得音频文件");
+
+        // 读取合并后的音频文件并转换为Base64
+        byte[] combinedAudioBytes = File.ReadAllBytes(tempOutputPath);
+        string base64Audio = Convert.ToBase64String(combinedAudioBytes);
+         Debug.Log("请求数据:"+base64Audio);
+            // 准备请求数据
+        var requestData = new JudgeRequestData
+            {
+                speech_text = text, // 替换为实际演讲文本
+                speaker_audio = base64Audio // 替换得到的音频
+            };
+
+            // var testData = new QuestionRequestData{
+            //     speech_text = "text", // 替换为实际演讲文本
+            //     c = 1 // 替换得到的音频
+            // };
+
+            string jsonData = JsonUtility.ToJson(requestData);
+            Debug.Log("正在发送请求");
+            Debug.Log("即将发送的JSON: " + jsonData);
+        // 创建并发送POST请求
+        using (UnityWebRequest webRequest = new UnityWebRequest(apiUrl, "POST"))
+        {
+            byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
+            webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            webRequest.downloadHandler = new DownloadHandlerBuffer();
+            webRequest.SetRequestHeader("Content-Type", "application/json");
+            Debug.Log("Webrequest：" + webRequest);
+            // 发送请求
+            yield return webRequest.SendWebRequest();
+            Debug.Log("webRequest.result = " + webRequest.result);
+            if (webRequest.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log("Received response: " + webRequest.downloadHandler.text);
+
+                // 解析响应
+                JudgeResponse response = JsonUtility.FromJson<JudgeResponse>(webRequest.downloadHandler.text);
+                Debug.Log("JudgeResponse : " + response);
+                Debug.Log("related audio : " + response.audio);
+                // 处理问题和音频
+                if (!string.IsNullOrEmpty(response.audio))
+                {
+                    StartCoroutine(PlayBase64Audio(response.audio));
+                }
+
+            }
+            else
+            {
+                Debug.LogError("Error: " + webRequest.error);
+                yield break;
+            }
+            // 删除其中记录数据，该步骤可以省略
+            foreach (var file in Directory.GetFiles(audioFolderPath))
+            {
+                File.Delete(file);
+            } 
+            } 
+    }
+        [System.Serializable]
+        private class JudgeResponse
+        {
+            public string audio;
+            public string text;
+        }
+    void CreateSilentWavFile(string filePath, int durationInSeconds)
+{
+    // WAV格式参数
+    const int sampleRate = 44100;
+    const short bitsPerSample = 16;
+    const short channels = 1;
+    const int byteRate = sampleRate * channels * bitsPerSample / 8;
+    int dataSize = sampleRate * durationInSeconds * channels * bitsPerSample / 8;
+
+    using (var fs = new FileStream(filePath, FileMode.Create))
+    using (var writer = new BinaryWriter(fs))
+    {
+        // RIFF头
+        writer.Write(new[] { 'R', 'I', 'F', 'F' });
+        writer.Write(36 + dataSize); // 文件总大小
+        writer.Write(new[] { 'W', 'A', 'V', 'E' });
+
+        // fmt子块
+        writer.Write(new[] { 'f', 'm', 't', ' ' });
+        writer.Write(16); // PCM块大小
+        writer.Write((short)1); // 格式类型（PCM）
+        writer.Write(channels);
+        writer.Write(sampleRate);
+        writer.Write(byteRate);
+        writer.Write((short)(channels * bitsPerSample / 8)); // 块对齐
+        writer.Write(bitsPerSample);
+
+        // data子块
+        writer.Write(new[] { 'd', 'a', 't', 'a' });
+        writer.Write(dataSize);
+
+        // 写入静音数据（全0）
+        writer.Write(new byte[dataSize]);
+    }
+}
+
+
     /// <summary>
     /// 设置当前说话者并移动音频源
     /// </summary>
@@ -545,11 +752,11 @@ public class AcademicPresentationManager : MonoBehaviour
     public void SetCurrentSpeaker(GameObject speaker)
     {
         if (speaker == null) return;
-        
+
         currentSpeaker = speaker;
-        
-        
-        
+
+
+
         // 如果启用了音频源移动功能，将音频源移动到说话者位置
         if (moveAudioToSpeaker && questionAudioSource != null && currentSpeaker != null)
         {
@@ -852,24 +1059,33 @@ public class AcademicPresentationManager : MonoBehaviour
         
         Debug.Log($"音频播放速度已设置为: {audioPlaybackSpeed}");
     }
-    
     /// <summary>
     /// 播放问题音频
     /// </summary>
-    public void PlayQuestionAudio(int questionIndex = -1)
+    [System.Serializable]  // 必须添加此特性
+    public class QuestionRequestData
     {
-        // 获取RuntimeCharacterManager实例
-        RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
-        
-        // 检查是否在问答阶段
-        if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.QuestionTime) 
-        {
-            return;
-        }
-        
+        public string speech_text;
+        public int n;
+    }
+    private IEnumerator AskQuestionsRepeatedly()
+{
+        Debug.Log("进入了AskQuestionsRepeatedly");
+    // 获取RuntimeCharacterManager实例
+    RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
+    if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.QuestionTime) 
+    {
+        yield break;
+    }
+
+    int questionCount = 0;
+    const int maxQuestions = 3;
+    const float interval = 15f; // 15秒间隔
+    while (questionCount < maxQuestions)
+    {
         // 确保有音频播放器和音频剪辑
-        if (questionAudioSource != null && questionAudioClips != null && questionAudioClips.Length > 0)
-        {
+        // if (questionAudioSource != null && questionAudioClips != null && questionAudioClips.Length > 0)
+        // {
             // 如果没有当前说话者，尝试获取一个
             if (currentSpeaker == null && audienceManager != null)
             {
@@ -879,41 +1095,174 @@ public class AcademicPresentationManager : MonoBehaviour
                     SetCurrentSpeaker(questioner);
                 }
             }
-            
-            AudioClip clipToPlay;
-            
-            // 如果指定了索引并且索引有效，使用指定的音频
-            if (questionIndex >= 0 && questionIndex < questionAudioClips.Length)
+
+            // 调用后端API获取问题
+            string apiUrl = "http://127.0.0.1:5001/gen_question"; // 你的Flask后端地址
+            if (dataManager == null||!dataManager) {
+                dataManager = new FileDataManager();
+                dataManager.SetFileData("/Users/dongaixuan/Desktop/样式组件问题.txt","/Users/dongaixuan/Desktop/temp.pptx");
+                // yield break;
+                }
+
+            Debug.Log("dataManager.GetFileData().txtPath)"+dataManager.GetFileData().txtPath);
+            string text;
+            if (File.Exists(dataManager.GetFileData().txtPath))
             {
-                clipToPlay = questionAudioClips[questionIndex];
+            text = File.ReadAllText(dataManager.GetFileData().txtPath);
+            Debug.Log(text);
             }
-            // 否则随机选择一个音频
+            else{
+                text = "";
+            } 
+            Debug.Log("text:"+text);
+
+            // 准备请求数据
+            var requestData = new QuestionRequestData
+            {
+                speech_text = text, // 替换为实际演讲文本
+                n = 1 // 想要生成的问题数量
+            };
+
+            var testData = new QuestionRequestData{
+                speech_text = "text", // 替换为实际演讲文本
+                n = 1 // 想要生成的问题数量
+            };
+
+            string jsonData = JsonUtility.ToJson(requestData);
+            Debug.Log("正在发送请求");
+            Debug.Log("即将发送的JSON: " + jsonData);
+            // 创建并发送POST请求
+            using (UnityWebRequest webRequest = new UnityWebRequest(apiUrl, "POST"))
+            {
+                byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
+                webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                webRequest.downloadHandler = new DownloadHandlerBuffer();
+                webRequest.SetRequestHeader("Content-Type", "application/json");
+                Debug.Log("Webrequest："+webRequest);
+                // 发送请求
+                yield return webRequest.SendWebRequest();
+                Debug.Log("webRequest.result = "+webRequest.result);
+                if (webRequest.result == UnityWebRequest.Result.Success)
+                {
+                    Debug.Log("Received response: " + webRequest.downloadHandler.text);
+                
+                    // 解析响应
+                    QuestionResponse response = JsonUtility.FromJson<QuestionResponse>(webRequest.downloadHandler.text);
+                    Debug.Log("QuestionResponse : "+ response);
+                    Debug.Log("related audio : "+ response.audio);
+                    // 处理问题和音频
+                    if (!string.IsNullOrEmpty(response.audio))
+                    {
+                        StartCoroutine(PlayBase64Audio(response.audio));
+                    }
+                questionCount++;
+                if (questionCount < maxQuestions)
+                {
+                    Debug.Log($"Waiting {interval} seconds before next question...");
+                    yield return new WaitForSeconds(interval);
+                }
+
+                }
+                else
+                {
+                    Debug.LogError("Error: " + webRequest.error);
+                    yield break;
+                }
+            } 
+            }
+              Debug.Log("Finished asking all questions");
+              }
+        [System.Serializable]
+        private class QuestionResponse
+        {
+            public string audio;
+            public string text;
+        }
+    IEnumerator PlayBase64Audio(string base64Data)
+    {
+        byte[] audioBytes = Convert.FromBase64String(base64Data);
+
+        // 创建临时文件
+        string tempPath = Path.Combine(Application.temporaryCachePath, "tempAudio.wav");
+        File.WriteAllBytes(tempPath, audioBytes);
+        Debug.Log("已经写入临时文件 : "+ tempPath);
+        // 加载音频
+        using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip("file://" + tempPath, AudioType.WAV))
+        {
+            yield return www.SendWebRequest();
+            Debug.Log("www.result " + www.result);
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
+                AudioSource.PlayClipAtPoint(clip, Camera.main.transform.position);
+            }
             else
             {
-                clipToPlay = questionAudioClips[UnityEngine.Random.Range(0, questionAudioClips.Length)];
+                Debug.LogError("Audio load error: " + www.error);
             }
-            
-            // 设置当前问题内容
-            currentQuestionContent = $"问题: {clipToPlay.name}";
-            
-            // 播放音频
-            questionAudioSource.clip = clipToPlay;
-            // 使用随机语速
-            float randomSpeechRate = UnityEngine.Random.Range(minSpeechRate, maxSpeechRate);
-            questionAudioSource.pitch = randomSpeechRate;
-            questionAudioSource.Play();
-            
-            // 在音频完成后重置音频源位置
-            StartCoroutine(ResetAudioSourceAfterPlaying(clipToPlay.length / randomSpeechRate));
-            
-            Debug.Log($"正在播放问题音频: {clipToPlay.name}, 速度: {randomSpeechRate}");
         }
-        else
-        {
-            Debug.LogWarning("问题音频组件或音频剪辑未设置，无法播放问题音频。");
-        }
+
+        // 删除临时文件
+        File.Delete(tempPath);
     }
-    
+    // public void PlayQuestionAudio(int questionIndex = -1)
+    // {
+    //     // 获取RuntimeCharacterManager实例
+    //     RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
+
+    //     // 检查是否在问答阶段
+    //     if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.QuestionTime) 
+    //     {
+    //         return;
+    //     }
+
+    //     // 确保有音频播放器和音频剪辑
+    //     if (questionAudioSource != null && questionAudioClips != null && questionAudioClips.Length > 0)
+    //     {
+    //         // 如果没有当前说话者，尝试获取一个
+    //         if (currentSpeaker == null && audienceManager != null)
+    //         {
+    //             GameObject questioner = audienceManager.GetRandomQuestioner();
+    //             if (questioner != null)
+    //             {
+    //                 SetCurrentSpeaker(questioner);
+    //             }
+    //         }
+
+    //         AudioClip clipToPlay;
+
+    //         // 如果指定了索引并且索引有效，使用指定的音频
+    //         if (questionIndex >= 0 && questionIndex < questionAudioClips.Length)
+    //         {
+    //             clipToPlay = questionAudioClips[questionIndex];
+    //         }
+    //         // 否则随机选择一个音频
+    //         else
+    //         {
+    //             clipToPlay = questionAudioClips[UnityEngine.Random.Range(0, questionAudioClips.Length)];
+    //         }
+
+    //         // 设置当前问题内容
+    //         currentQuestionContent = $"问题: {clipToPlay.name}";
+
+    //         // 播放音频
+    //         questionAudioSource.clip = clipToPlay;
+    //         // 使用随机语速
+    //         float randomSpeechRate = UnityEngine.Random.Range(minSpeechRate, maxSpeechRate);
+    //         questionAudioSource.pitch = randomSpeechRate;
+    //         questionAudioSource.Play();
+
+    //         // 在音频完成后重置音频源位置
+    //         StartCoroutine(ResetAudioSourceAfterPlaying(clipToPlay.length / randomSpeechRate));
+
+    //         Debug.Log($"正在播放问题音频: {clipToPlay.name}, 速度: {randomSpeechRate}");
+    //     }
+    //     else
+    //     {
+    //         Debug.LogWarning("问题音频组件或音频剪辑未设置，无法播放问题音频。");
+    //     }
+    // }
+
     /// <summary>
     /// 在音频播放完成后重置音频源位置
     /// </summary>
