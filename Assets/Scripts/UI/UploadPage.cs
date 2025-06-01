@@ -9,7 +9,7 @@ using System.Collections;
 public class FileDataManager : MonoBehaviour
 {
     public static FileDataManager Instance;
-    
+
     [System.Serializable]
     public class FileData
     {
@@ -17,6 +17,7 @@ public class FileDataManager : MonoBehaviour
         public string txtPath;
         public string pptFileName;
         public string txtFileName;
+        public string name;
     }
     
     public FileData fileData = new FileData();
@@ -33,13 +34,14 @@ public class FileDataManager : MonoBehaviour
             Destroy(gameObject);
         }
     }
-    
-    public void SetFileData(string pptPath, string txtPath)
+
+    public void SetFileData(string pptPath, string txtPath, string name = "小b")
     {
         fileData.pptPath = pptPath;
         fileData.txtPath = txtPath;
         fileData.pptFileName = string.IsNullOrEmpty(pptPath) ? "" : Path.GetFileName(pptPath);
         fileData.txtFileName = string.IsNullOrEmpty(txtPath) ? "" : Path.GetFileName(txtPath);
+        fileData.name = name;
     }
     
     public FileData GetFileData()

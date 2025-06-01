@@ -207,7 +207,7 @@ public class AcademicPresentationManager : MonoBehaviour
         UpdateUISettings();
 
        // 播放场景介绍音频
-       PlayIntroductionAudio();       
+       StartCoroutine(PlayIntroductionAudio());       
 
         // 设置初始语速
         currentSpeechRate = defaultSpeechRate;
@@ -280,21 +280,23 @@ public class AcademicPresentationManager : MonoBehaviour
         });
         
         // 问答阶段开始事件
-        onQuestionPhaseStart.AddListener(() => {
+        onQuestionPhaseStart.AddListener(() =>
+        {
             Debug.Log("Question phase started!");
-            
-            
-            
+
+
+
             // 更新角色管理器的状态为问答环节
             RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
             if (characterManager != null)
             {
-                Debug.Log("问答环节状态"); 
+                Debug.Log("问答环节状态");
                 characterManager.HandleQuestionPhaseStart();
             }
-            
+
             // 1.5秒后自动触发第一个问题
             StartCoroutine(TriggerFirstQuestionAfterDelay(1.5f));
+            // Judgespeech();
         });
         
         // 问答阶段结束事件
@@ -338,11 +340,18 @@ public class AcademicPresentationManager : MonoBehaviour
     {
         yield return new WaitForSeconds(delay);
         Debug.Log("已经进入");
-        AskRandomQuestion();
-        // Judgespeech();
+        yield return StartCoroutine(AskRandomQuestion()); // 等待协程执行完毕
+    
+        // 2. 提问完成后执行评分协程
+        yield return StartCoroutine(JudgespeechCoroutine());
         
     }
-    
+
+    private IEnumerator JudgespeechCoroutine()
+    {
+        Judgespeech();
+        yield return null;
+    }
     /// <summary>
     /// 开始汇报
     /// </summary>
@@ -429,10 +438,10 @@ public class AcademicPresentationManager : MonoBehaviour
         StartCoroutine(StartQuestionPhaseAfterApplause(3.0f));
 
         //随机提问
-        AskRandomQuestion();
+        // AskRandomQuestion();
 
-        //对演讲内容进行评价
-        Judgespeech();
+        // //对演讲内容进行评价
+        // Judgespeech();
     }
     
     /// <summary>
@@ -479,50 +488,52 @@ public class AcademicPresentationManager : MonoBehaviour
     /// <summary>
     /// 让随机观众提问
     /// </summary>
-    public void AskRandomQuestion()
+   public IEnumerator AskRandomQuestion()
+{
+    Debug.Log("已经进入AskRandomQuestion阶段");
+    
+    // 获取RuntimeCharacterManager实例
+    RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
+    
+    // 检查是否在问答阶段
+    if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.QuestionTime) 
     {
-        Debug.Log("已经进入AskRandomQuestion阶段");
-        // 获取RuntimeCharacterManager实例
-        RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
+        yield break; // 协程版本使用yield break
+    }
+    
+    Debug.Log("audienceManager: "+audienceManager);
+    if (audienceManager != null)
+    {
+        // 使用AudienceManager的GetRandomQuestioner方法
+        GameObject questioner = audienceManager.GetRandomQuestioner();
         
-        // 检查是否在问答阶段
-        if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.QuestionTime) 
+        if (questioner != null)
         {
-            return;
-        }
-        Debug.Log("audienceManager: "+audienceManager);
-        if (audienceManager != null)
-        {
-            // 使用AudienceManager的GetRandomQuestioner方法
-            GameObject questioner = audienceManager.GetRandomQuestioner();
+            Debug.Log($"观众 {questioner.name} 正在提问...");
             
-         
-                Debug.Log($"观众 {questioner.name} 正在提问...");
+            // 设置当前提问者
+            if (characterManager != null)
+            {
+                characterManager.SetCurrentQuestioner(questioner);
                 
-                // 设置当前提问者
-                if (characterManager != null)
+                // 获取演讲者对象
+                GameObject presenter = characterManager.GetPresenter();
+                if (presenter != null)
                 {
-                    // 设置当前提问者
-                    characterManager.SetCurrentQuestioner(questioner);
-                    
-                    // 获取演讲者对象
-                    GameObject presenter = characterManager.GetPresenter();
-                    if (presenter != null)
-                    {
-                        // 使用RuntimeCharacterManager的方法让演讲者和提问者互相看向对方
-                        StartCoroutine(characterManager.RotatePresenterTowardsQuestioner(presenter, questioner));
-                        StartCoroutine(characterManager.RotateQuestionerTowardsPresenter(questioner, presenter));
-                    }
+                    // 使用yield return等待旋转完成
+                    yield return StartCoroutine(characterManager.RotatePresenterTowardsQuestioner(presenter, questioner));
+                    yield return StartCoroutine(characterManager.RotateQuestionerTowardsPresenter(questioner, presenter));
                 }
-                
-                // 设置当前说话者
-                SetCurrentSpeaker(questioner);
-
-            // 使用新的方法播放随机问题音频
-            StartCoroutine(AskQuestionsRepeatedly()); // -1表示随机选择
+            }
             
+            // 设置当前说话者
+            SetCurrentSpeaker(questioner);
+
+            // 等待问题音频播放完成
+            yield return StartCoroutine(AskQuestionsRepeatedly());
         }
     }
+}
        /// <summary>
     /// 让随机观众评价
     /// </summary>
@@ -603,7 +614,7 @@ public class AcademicPresentationManager : MonoBehaviour
             string apiUrl = "http://127.0.0.1:5001/judge"; // 你的Flask后端地址
             if (dataManager == null||!dataManager) {
                 dataManager = new FileDataManager();
-                dataManager.SetFileData("/Users/dongaixuan/Desktop/样式组件问题.txt","/Users/dongaixuan/Desktop/temp.pptx");
+                dataManager.SetFileData( "Assets/Resources/ppts/temp.ppt","Assets/Resources/演讲稿.txt");
                 // yield break;
                 }
 
@@ -1069,23 +1080,23 @@ public class AcademicPresentationManager : MonoBehaviour
         public int n;
     }
     private IEnumerator AskQuestionsRepeatedly()
-{
+    {
         Debug.Log("进入了AskQuestionsRepeatedly");
-    // 获取RuntimeCharacterManager实例
-    RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
-    if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.QuestionTime) 
-    {
-        yield break;
-    }
+        // 获取RuntimeCharacterManager实例
+        RuntimeCharacterManager characterManager = RuntimeCharacterManager.Instance;
+        if (characterManager == null || characterManager.currentState != RuntimeCharacterManager.PresentationState.QuestionTime)
+        {
+            yield break;
+        }
 
-    int questionCount = 0;
-    const int maxQuestions = 3;
-    const float interval = 15f; // 15秒间隔
-    while (questionCount < maxQuestions)
-    {
-        // 确保有音频播放器和音频剪辑
-        // if (questionAudioSource != null && questionAudioClips != null && questionAudioClips.Length > 0)
-        // {
+        int questionCount = 0;
+        const int maxQuestions = 3;
+        const float interval = 25f; // 30秒间隔
+        while (questionCount < maxQuestions)
+        {
+            // 确保有音频播放器和音频剪辑
+            // if (questionAudioSource != null && questionAudioClips != null && questionAudioClips.Length > 0)
+            // {
             // 如果没有当前说话者，尝试获取一个
             if (currentSpeaker == null && audienceManager != null)
             {
@@ -1098,23 +1109,25 @@ public class AcademicPresentationManager : MonoBehaviour
 
             // 调用后端API获取问题
             string apiUrl = "http://127.0.0.1:5001/gen_question"; // 你的Flask后端地址
-            if (dataManager == null||!dataManager) {
+            if (dataManager == null || !dataManager)
+            {
                 dataManager = new FileDataManager();
-                dataManager.SetFileData("/Users/dongaixuan/Desktop/样式组件问题.txt","/Users/dongaixuan/Desktop/temp.pptx");
+                dataManager.SetFileData( "Assets/Resources/ppts/temp.ppt","Assets/Resources/演讲稿.txt");
                 // yield break;
-                }
+            }
 
-            Debug.Log("dataManager.GetFileData().txtPath)"+dataManager.GetFileData().txtPath);
+            Debug.Log("dataManager.GetFileData().txtPath)" + dataManager.GetFileData().txtPath);
             string text;
             if (File.Exists(dataManager.GetFileData().txtPath))
             {
-            text = File.ReadAllText(dataManager.GetFileData().txtPath);
-            Debug.Log(text);
+                text = File.ReadAllText(dataManager.GetFileData().txtPath);
+                Debug.Log(text);
             }
-            else{
+            else
+            {
                 text = "";
-            } 
-            Debug.Log("text:"+text);
+            }
+            Debug.Log("text:" + text);
 
             // 准备请求数据
             var requestData = new QuestionRequestData
@@ -1123,8 +1136,10 @@ public class AcademicPresentationManager : MonoBehaviour
                 n = 1 // 想要生成的问题数量
             };
 
-            var testData = new QuestionRequestData{
-                speech_text = "text", // 替换为实际演讲文本
+            TextAsset textAsset = Resources.Load<TextAsset>("演讲稿");
+            var testData = new QuestionRequestData
+            {
+                speech_text = textAsset.text, // 替换为实际演讲文本
                 n = 1 // 想要生成的问题数量
             };
 
@@ -1138,29 +1153,29 @@ public class AcademicPresentationManager : MonoBehaviour
                 webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
                 webRequest.downloadHandler = new DownloadHandlerBuffer();
                 webRequest.SetRequestHeader("Content-Type", "application/json");
-                Debug.Log("Webrequest："+webRequest);
+                Debug.Log("Webrequest：" + webRequest);
                 // 发送请求
                 yield return webRequest.SendWebRequest();
-                Debug.Log("webRequest.result = "+webRequest.result);
+                Debug.Log("webRequest.result = " + webRequest.result);
                 if (webRequest.result == UnityWebRequest.Result.Success)
                 {
                     Debug.Log("Received response: " + webRequest.downloadHandler.text);
-                
+
                     // 解析响应
                     QuestionResponse response = JsonUtility.FromJson<QuestionResponse>(webRequest.downloadHandler.text);
-                    Debug.Log("QuestionResponse : "+ response);
-                    Debug.Log("related audio : "+ response.audio);
+                    Debug.Log("QuestionResponse : " + response);
+                    Debug.Log("related audio : " + response.audio);
                     // 处理问题和音频
                     if (!string.IsNullOrEmpty(response.audio))
                     {
                         StartCoroutine(PlayBase64Audio(response.audio));
                     }
-                questionCount++;
-                if (questionCount < maxQuestions)
-                {
-                    Debug.Log($"Waiting {interval} seconds before next question...");
-                    yield return new WaitForSeconds(interval);
-                }
+                    questionCount++;
+                    if (questionCount < maxQuestions)
+                    {
+                        Debug.Log($"Waiting {interval} seconds before next question...");
+                        yield return new WaitForSeconds(interval);
+                    }
 
                 }
                 else
@@ -1168,9 +1183,10 @@ public class AcademicPresentationManager : MonoBehaviour
                     Debug.LogError("Error: " + webRequest.error);
                     yield break;
                 }
-            } 
             }
-              Debug.Log("Finished asking all questions");
+        }
+        Debug.Log("Finished asking all questions");
+               yield return new WaitForSeconds(20f);
               }
         [System.Serializable]
         private class QuestionResponse
@@ -1480,37 +1496,94 @@ public class AcademicPresentationManager : MonoBehaviour
         
         return presenter;
     }
-    
+        [System.Serializable]  // 必须添加此特性[System.Serializable] // 确保可被 Unity 的 JsonUtility 序列化
+    public class IntroductionRequestData
+    {
+        public string speaker_name; // 演讲文本
+        public string speech_title; // Base64 编码的 WAV 音频数据
+    }
     /// <summary>
     /// 播放场景介绍音频
     /// </summary>
-    public void PlayIntroductionAudio()
+    public IEnumerator PlayIntroductionAudio()
     {
-        if (introductionAudioSource != null && introductionAudioClip != null)
+         string apiUrl = "http://127.0.0.1:5001//gen_hello"; // 你的Flask后端地址
+        if (dataManager == null || !dataManager)
+            {
+                dataManager = new FileDataManager();
+                dataManager.SetFileData( "Assets/Resources/ppts/temp.ppt","Assets/Resources/演讲稿.txt");
+                // yield break;
+            }
+            Debug.Log("dataManager.GetFileData().txtPath)"+dataManager.GetFileData().txtPath);
+        string firstLine;
+        string secondLine;
+        if (File.Exists(dataManager.GetFileData().txtPath))
         {
-            // 设置音频剪辑
-            introductionAudioSource.clip = introductionAudioClip;
-            
-            // 播放音频
-            introductionAudioSource.Play();
-            
-            // 设置状态
-            isPlayingIntroduction = true;
-            presenterCanMove = false;
-            
-            // 启动协程等待音频播放完成
-            StartCoroutine(WaitForIntroductionToFinish());
-            
-            Debug.Log("正在播放场景介绍音频");
+            firstLine = File.ReadLines(dataManager.GetFileData().txtPath).ElementAtOrDefault(0);
+            secondLine = File.ReadLines(dataManager.GetFileData().txtPath).ElementAtOrDefault(1);
+            Debug.Log(secondLine);
         }
-        else
-        {
-            Debug.LogWarning("场景介绍音频源或音频剪辑未设置，无法播放介绍音频");
-            // 如果没有介绍音频，直接允许演讲者移动
-            presenterCanMove = true;
-        }
-    }
+        else {
+                firstLine = "";
+                secondLine = "";
+        } 
+            Debug.Log("firstLine:"+firstLine);
+            Debug.Log("secondLine:"+secondLine); 
+            // 准备请求数据
+            var requestData = new IntroductionRequestData
+            {
+                speaker_name = secondLine, // 替换为实际演讲文本
+                speech_title = firstLine // 想要生成的问题数量
+            };
+
+
+            string jsonData = JsonUtility.ToJson(requestData);
+            Debug.Log("正在发送请求");
+            Debug.Log("即将发送的JSON: " + jsonData);
+            // 创建并发送POST请求
+            using (UnityWebRequest webRequest = new UnityWebRequest(apiUrl, "POST"))
+            {
+                byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
+                webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                webRequest.downloadHandler = new DownloadHandlerBuffer();
+                webRequest.SetRequestHeader("Content-Type", "application/json");
+                Debug.Log("Webrequest：" + webRequest);
+                // 发送请求
+                yield return webRequest.SendWebRequest();
+                Debug.Log("webRequest.result = " + webRequest.result);
+                if (webRequest.result == UnityWebRequest.Result.Success)
+                {
+                    Debug.Log("Received response: " + webRequest.downloadHandler.text);
+
+                    // 解析响应
+                    IntroductionResponse response = JsonUtility.FromJson<IntroductionResponse>(webRequest.downloadHandler.text);
+                    // Debug.Log("QuestionResponse : " + response);
+                    Debug.Log("related audio : " + response.audio);
+                    // 处理问题和音频
+                    if (!string.IsNullOrEmpty(response.audio))
+                    {
+                        StartCoroutine(PlayBase64Audio(response.audio));
+                    }
+            
+
+                }
+                else
+                {
+                    Debug.LogError("Error: " + webRequest.error);
+                    yield break;
+                }
+            }
+        
+                Debug.Log("Finished Introduction");
+            //    yield return new WaitForSeconds(20f);
+              }
     
+    
+        private class IntroductionResponse
+        {
+            public string audio;
+            public string text;
+        }
     /// <summary>
     /// 等待介绍音频播放完成
     /// </summary>

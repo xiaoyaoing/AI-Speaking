@@ -25,7 +25,7 @@ public class AudioRecorder : MonoBehaviour
     void Start()
     {
         audioSource = GetComponent<AudioSource>();
-        
+
         // Create save directory if it doesn't exist
         string fullPath = Path.Combine(Application.dataPath, saveFolder);
         if (!Directory.Exists(fullPath))
@@ -35,6 +35,7 @@ public class AudioRecorder : MonoBehaviour
         Debug.Log("音频存储目录: " + fullPath);
         // Initialize file counter based on existing files
         InitializeFileCounter();
+        StartRecording();
     }
 
     void InitializeFileCounter()
@@ -56,10 +57,10 @@ public class AudioRecorder : MonoBehaviour
         //     isRecording = false;
         // }
 
-    if (!isRecording)
-    {
-        StartRecording();
-    }
+    // if (!isRecording)
+    // {
+    //     StartRecording();
+    // }
 
         if (Input.GetKeyDown(KeyCode.Z) && (isRecording))
         {
@@ -73,46 +74,33 @@ public class AudioRecorder : MonoBehaviour
     {
         isRecording = true;
         // 0 表示无限录制，true 表示循环缓冲
-        recordingClip = Microphone.Start(null, true, 10, 44100); // 10 是缓冲长度，可以调整
+        recordingClip = Microphone.Start(null, true, 30, 16000); 
         Debug.Log("Recording started (Press Z to stop)...");
     }
 
     void StopRecordingAndSend()
     {
-           Microphone.End(null);
-        isRecording = false;
-        Debug.Log("Recording stopped.");
+            int recordingPos = Microphone.GetPosition(null);
+            Microphone.End(null);
+            isRecording = false;
+    
+            // 创建一个新的音频剪辑来保存录制的部分
+            AudioClip recordedClip = AudioClip.Create("RecordedClip", recordingPos, 
+                                            recordingClip.channels, 
+                                            recordingClip.frequency, false);
+    
+    // 将数据从原始剪辑复制到新剪辑
+    float[] data = new float[recordingPos * recordingClip.channels];
+    recordingClip.GetData(data, 0);
+    recordedClip.SetData(data, 0);
+    
+    // 保存音频文件
+    SaveAudioClip(recordedClip);
+    
+    Debug.Log("Recording stopped and saved. Starting new recording...");
 
-        // Save the recording
-        SaveAudioClip(recordingClip);
 
     }
-AudioClip TrimAudioClip(AudioClip clip, int recordingPos)
-{
-    // 获取原始音频数据
-    float[] samples = new float[clip.samples * clip.channels];
-    clip.GetData(samples, 0);
-
-    // 计算有效数据的长度
-    int effectiveSamples = recordingPos * clip.channels;
-    if (effectiveSamples <= 0) effectiveSamples = samples.Length;
-
-    // 提取有效部分
-    float[] trimmedSamples = new float[effectiveSamples];
-    Array.Copy(samples, trimmedSamples, effectiveSamples);
-
-    // 创建新的 AudioClip
-    AudioClip trimmedClip = AudioClip.Create(
-        "TrimmedClip",
-        effectiveSamples / clip.channels,
-        clip.channels,
-        clip.frequency,
-        false
-    );
-    trimmedClip.SetData(trimmedSamples, 0);
-
-    return trimmedClip;
-}
     void SaveAudioClip(AudioClip clip)
     {
         Debug.Log("fileCounter:"+fileCounter);
