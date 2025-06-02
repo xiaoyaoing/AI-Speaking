@@ -4,6 +4,9 @@ using System.IO;
 using System.Diagnostics;
 using UnityEngine.SceneManagement;
 using System.Collections;
+using UnityEngine.Networking;
+using System;
+using System.Linq;
 
 // 数据管理器，用于在场景之间传递数据
 public class FileDataManager : MonoBehaviour
@@ -59,12 +62,49 @@ public class UploadPage : MonoBehaviour
     [SerializeField] private Text txtPathText;
     [SerializeField] private Text statusText;
     [SerializeField] private Image backgroundImage; // 背景图片组件
+    
+    // 新增：重新生成选项
+    [SerializeField] private Toggle regenerateToggle;
+    [SerializeField] private Text regenerateLabel;
 
     private string selectedPptPath;
     private string selectedTxtPath;
     private bool isProcessing = false;
     private FileDataManager dataManager;
     private Process currentProcess; // 保存当前进程引用
+
+    // 新增：音频获取相关数据类
+    [System.Serializable]
+    public class IntroductionRequestData
+    {
+        public string speaker_name;
+        public string speech_title;
+    }
+
+    [System.Serializable]
+    public class QuestionRequestData
+    {
+        public string speech_text;
+        public int n;
+    }
+
+    [System.Serializable]
+    private class IntroductionResponse
+    {
+        public string audio;
+        public string text;
+    }
+
+    [System.Serializable]
+    private class QuestionResponse
+    {
+        public string audio;
+        public string text;
+    }
+
+    // 新增：音频存储路径
+    private string audioResourcesPath;
+    private string pptResourcesPath;
 
     private void Start()
     {
@@ -89,6 +129,83 @@ public class UploadPage : MonoBehaviour
         
         // 如果有之前保存的数据，恢复显示
         RestoreFileData();
+
+        // 初始化资源路径
+        audioResourcesPath = Path.Combine(Application.dataPath, "Resources", "GeneratedAudios");
+        pptResourcesPath = Path.Combine(Application.dataPath, "Resources", "ppts");
+        
+        if (!Directory.Exists(audioResourcesPath))
+        {
+            Directory.CreateDirectory(audioResourcesPath);
+        }
+        if (!Directory.Exists(pptResourcesPath))
+        {
+            Directory.CreateDirectory(pptResourcesPath);
+        }
+
+        // 初始化重新生成选项
+        InitializeRegenerateOption();
+        
+        // 检查现有文件
+        CheckExistingFiles();
+    }
+
+    /// <summary>
+    /// 初始化重新生成选项
+    /// </summary>
+    private void InitializeRegenerateOption()
+    {
+        if (regenerateToggle != null)
+        {
+            regenerateToggle.isOn = true; // 默认重新生成
+            regenerateToggle.onValueChanged.AddListener(OnRegenerateToggleChanged);
+        }
+        
+        if (regenerateLabel != null)
+        {
+            regenerateLabel.text = "重新生成音频和PPT";
+        }
+    }
+
+    /// <summary>
+    /// 重新生成选项切换事件
+    /// </summary>
+    private void OnRegenerateToggleChanged(bool value)
+    {
+        CheckReadyState();
+    }
+
+    /// <summary>
+    /// 检查现有文件
+    /// </summary>
+    private void CheckExistingFiles()
+    {
+        bool hasIntroAudio = File.Exists(Path.Combine(audioResourcesPath, "introduction_audio.wav"));
+        bool hasQuestion1Audio = File.Exists(Path.Combine(audioResourcesPath, "question_audio_1.wav"));
+        bool hasQuestion2Audio = File.Exists(Path.Combine(audioResourcesPath, "question_audio_2.wav"));
+        bool hasPptImages = Directory.Exists(pptResourcesPath) && Directory.GetFiles(pptResourcesPath, "*.png").Length > 0;
+        bool hasScript = File.Exists(Path.Combine(Application.dataPath, "Resources", "script.txt"));
+
+        if (hasIntroAudio && hasQuestion1Audio && hasQuestion2Audio && hasPptImages && hasScript)
+        {
+            statusText.text = "检测到已有文件，可选择直接使用或重新生成";
+            
+            // 如果有regenerateToggle，可以设置为false让用户选择
+            if (regenerateToggle != null)
+            {
+                regenerateToggle.isOn = false;
+            }
+        }
+        else
+        {
+            statusText.text = "请选择PPT文件和文本文件";
+            
+            // 如果文件不完整，强制重新生成
+            if (regenerateToggle != null)
+            {
+                regenerateToggle.isOn = true;
+            }
+        }
     }
 
     private void OnDestroy()
@@ -172,16 +289,68 @@ public class UploadPage : MonoBehaviour
 
     private void CheckReadyState()
     {
-        // 只有当两个文件都选择了，且不在处理中时，才启用开始按钮
-        startButton.interactable = !string.IsNullOrEmpty(selectedPptPath) && 
-                                 !string.IsNullOrEmpty(selectedTxtPath) &&
-                                 !isProcessing;
+        bool filesSelected = !string.IsNullOrEmpty(selectedPptPath) && !string.IsNullOrEmpty(selectedTxtPath);
+        bool shouldRegenerate = regenerateToggle == null || regenerateToggle.isOn;
+        
+        // 如果选择不重新生成，检查是否已有所需文件
+        if (!shouldRegenerate)
+        {
+            bool hasAllFiles = CheckAllRequiredFilesExist();
+            startButton.interactable = hasAllFiles && !isProcessing;
+            
+            if (hasAllFiles)
+            {
+                statusText.text = "已有完整文件，可直接开始";
+            }
+            else
+            {
+                statusText.text = "文件不完整，请选择重新生成";
+                startButton.interactable = false;
+            }
+        }
+        else
+        {
+            // 需要重新生成，检查文件是否选择
+            startButton.interactable = filesSelected && !isProcessing;
+        }
+    }
+
+    /// <summary>
+    /// 检查所有必需文件是否存在
+    /// </summary>
+    private bool CheckAllRequiredFilesExist()
+    {
+        bool hasIntroAudio = File.Exists(Path.Combine(audioResourcesPath, "introduction_audio.wav"));
+        bool hasQuestion1Audio = File.Exists(Path.Combine(audioResourcesPath, "question_audio_1.wav"));
+        bool hasQuestion2Audio = File.Exists(Path.Combine(audioResourcesPath, "question_audio_2.wav"));
+        bool hasPptImages = Directory.Exists(pptResourcesPath) && Directory.GetFiles(pptResourcesPath, "*.png").Length > 0;
+        bool hasScript = File.Exists(Path.Combine(Application.dataPath, "Resources", "script.txt"));
+
+        return hasIntroAudio && hasQuestion1Audio && hasQuestion2Audio && hasPptImages && hasScript;
     }
 
     public void StartProcess()
     {
         if (isProcessing) return;
 
+        bool shouldRegenerate = regenerateToggle == null || regenerateToggle.isOn;
+        
+        // 如果选择不重新生成且文件完整，直接跳转
+        if (!shouldRegenerate && CheckAllRequiredFilesExist())
+        {
+            statusText.text = "使用现有文件，正在准备...";
+            
+            // 设置文件数据管理器
+            if (!string.IsNullOrEmpty(selectedPptPath) && !string.IsNullOrEmpty(selectedTxtPath))
+            {
+                dataManager.SetFileData(selectedPptPath, selectedTxtPath);
+            }
+            
+            StartCoroutine(LoadMainSceneDirectly());
+            return;
+        }
+
+        // 需要重新生成，检查文件选择
         if (string.IsNullOrEmpty(selectedPptPath) || string.IsNullOrEmpty(selectedTxtPath))
         {
             statusText.text = "请先选择所有必需的文件";
@@ -199,6 +368,15 @@ public class UploadPage : MonoBehaviour
 
         // 启动协程处理
         StartCoroutine(ProcessPptAsync());
+    }
+
+    /// <summary>
+    /// 直接加载主场景
+    /// </summary>
+    private System.Collections.IEnumerator LoadMainSceneDirectly()
+    {
+        yield return new WaitForSeconds(1f);
+        LoadMainScene();
     }
 
     private System.Collections.IEnumerator ProcessPptAsync()
@@ -493,17 +671,159 @@ public class UploadPage : MonoBehaviour
         // 处理结果（包含yield）
         if (saveSuccess)
         {
-            statusText.text = "处理完成！即将跳转...";
-            yield return new WaitForSeconds(1f);
+            statusText.text = "文本保存完成，正在生成音频...";
+            yield return new WaitForSeconds(0.5f);
 
-            // 加载主场景
-            LoadMainScene();
+            // 开始音频生成流程
+            yield return StartCoroutine(GenerateAllAudios());
         }
         else
         {
             statusText.text = $"保存文本文件失败: {errorMessage}";
             ResetUI();
         }
+    }
+
+    /// <summary>
+    /// 生成所有音频的主流程
+    /// </summary>
+    private System.Collections.IEnumerator GenerateAllAudios()
+    {
+        statusText.text = "正在生成欢迎音频...";
+        yield return StartCoroutine(GenerateIntroductionAudio());
+
+        statusText.text = "正在生成第一个问题音频...";
+        yield return StartCoroutine(GenerateQuestionAudio(1));
+
+        statusText.text = "正在生成第二个问题音频...";
+        yield return StartCoroutine(GenerateQuestionAudio(2));
+
+        statusText.text = "所有音频生成完成！即将跳转...";
+        yield return new WaitForSeconds(1f);
+
+        // 加载主场景
+        LoadMainScene();
+    }
+
+    /// <summary>
+    /// 生成欢迎音频
+    /// </summary>
+    private System.Collections.IEnumerator GenerateIntroductionAudio()
+    {
+        string apiUrl = "http://127.0.0.1:5001/gen_hello";
+        
+        string firstLine = "";
+        string secondLine = "";
+        
+        if (File.Exists(selectedTxtPath))
+        {
+            var lines = File.ReadAllLines(selectedTxtPath);
+            firstLine = lines.Length > 0 ? lines[0] : "";
+            secondLine = lines.Length > 1 ? lines[1] : "";
+        }
+
+        var requestData = new IntroductionRequestData
+        {
+            speaker_name = secondLine,
+            speech_title = firstLine
+        };
+
+        string jsonData = JsonUtility.ToJson(requestData);
+        UnityEngine.Debug.Log($"正在请求欢迎音频: {jsonData}");
+
+        using (UnityWebRequest webRequest = new UnityWebRequest(apiUrl, "POST"))
+        {
+            byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
+            webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            webRequest.downloadHandler = new DownloadHandlerBuffer();
+            webRequest.SetRequestHeader("Content-Type", "application/json");
+
+            yield return webRequest.SendWebRequest();
+
+            if (webRequest.result == UnityWebRequest.Result.Success)
+            {
+                IntroductionResponse response = JsonUtility.FromJson<IntroductionResponse>(webRequest.downloadHandler.text);
+                
+                if (!string.IsNullOrEmpty(response.audio))
+                {
+                    yield return StartCoroutine(SaveBase64Audio(response.audio, "introduction_audio"));
+                    UnityEngine.Debug.Log("欢迎音频生成成功");
+                }
+            }
+            else
+            {
+                UnityEngine.Debug.LogError($"欢迎音频生成失败: {webRequest.error}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 生成单个问题音频
+    /// </summary>
+    private System.Collections.IEnumerator GenerateQuestionAudio(int questionNumber)
+    {
+        string apiUrl = "http://127.0.0.1:5001/gen_question";
+        
+        string speechText = "";
+        if (File.Exists(selectedTxtPath))
+        {
+            speechText = File.ReadAllText(selectedTxtPath);
+        }
+
+        var requestData = new QuestionRequestData
+        {
+            speech_text = speechText,
+            n = 1 // 每次生成1个问题
+        };
+
+        string jsonData = JsonUtility.ToJson(requestData);
+        UnityEngine.Debug.Log($"正在请求第{questionNumber}个问题音频: {jsonData}");
+
+        using (UnityWebRequest webRequest = new UnityWebRequest(apiUrl, "POST"))
+        {
+            byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
+            webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            webRequest.downloadHandler = new DownloadHandlerBuffer();
+            webRequest.SetRequestHeader("Content-Type", "application/json");
+
+            yield return webRequest.SendWebRequest();
+
+            if (webRequest.result == UnityWebRequest.Result.Success)
+            {
+                QuestionResponse response = JsonUtility.FromJson<QuestionResponse>(webRequest.downloadHandler.text);
+                
+                if (!string.IsNullOrEmpty(response.audio))
+                {
+                    yield return StartCoroutine(SaveBase64Audio(response.audio, $"question_audio_{questionNumber}"));
+                    UnityEngine.Debug.Log($"第{questionNumber}个问题音频生成成功");
+                }
+            }
+            else
+            {
+                UnityEngine.Debug.LogError($"第{questionNumber}个问题音频生成失败: {webRequest.error}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 保存Base64音频到文件
+    /// </summary>
+    private System.Collections.IEnumerator SaveBase64Audio(string base64Audio, string fileName)
+    {
+        try
+        {
+            byte[] audioBytes = Convert.FromBase64String(base64Audio);
+            string audioFilePath = Path.Combine(audioResourcesPath, $"{fileName}.wav");
+            
+            File.WriteAllBytes(audioFilePath, audioBytes);
+            UnityEngine.Debug.Log($"音频已保存到: {audioFilePath}");
+        }
+        catch (System.Exception e)
+        {
+            UnityEngine.Debug.LogError($"保存音频失败: {e.Message}");
+        }
+        
+        yield return null;
     }
 
     private void CleanupProcess()
@@ -557,11 +877,76 @@ public class UploadPage : MonoBehaviour
     private void RestoreFileData()
     {
         FileDataManager.FileData fileData = dataManager.GetFileData();
-        selectedPptPath = fileData.pptPath;
-        selectedTxtPath = fileData.txtPath;
-        pptPathText.text = fileData.pptFileName;
-        txtPathText.text = fileData.txtFileName;
-        CheckReadyState();
+        
+        // 如果没有之前保存的数据，使用默认文件路径
+        if (string.IsNullOrEmpty(fileData.pptPath) && string.IsNullOrEmpty(fileData.txtPath))
+        {
+            SetDefaultFilePaths();
+        }
+        else
+        {
+            // 恢复之前保存的数据
+            selectedPptPath = fileData.pptPath;
+            selectedTxtPath = fileData.txtPath;
+            pptPathText.text = fileData.pptFileName;
+            txtPathText.text = fileData.txtFileName;
+            CheckReadyState();
+        }
+    }
+    
+    /// <summary>
+    /// 设置默认文件路径
+    /// </summary>
+    private void SetDefaultFilePaths()
+    {
+        // 默认PPT路径
+        string defaultPptFullPath = Path.Combine(Application.dataPath, "Resources/ppts/hci_ppt.pptx");
+        
+        // 默认TXT路径
+        string defaultTxtFullPath = Path.Combine(Application.dataPath, "Resources/演讲稿.txt");
+        
+        // 检查默认文件是否存在并设置
+        bool pptExists = File.Exists(defaultPptFullPath);
+        bool txtExists = File.Exists(defaultTxtFullPath);
+        
+        if (pptExists)
+        {
+            selectedPptPath = defaultPptFullPath;
+            pptPathText.text = "hci_ppt.pptx (默认)";
+            UnityEngine.Debug.Log($"使用默认PPT文件: {defaultPptFullPath}");
+        }
+        else
+        {
+            UnityEngine.Debug.LogWarning($"默认PPT文件不存在: {defaultPptFullPath}");
+            pptPathText.text = "请选择PPT文件";
+        }
+        
+        if (txtExists)
+        {
+            selectedTxtPath = defaultTxtFullPath;
+            txtPathText.text = "演讲稿.txt (默认)";
+            UnityEngine.Debug.Log($"使用默认TXT文件: {defaultTxtFullPath}");
+        }
+        else
+        {
+            UnityEngine.Debug.LogWarning($"默认TXT文件不存在: {defaultTxtFullPath}");
+            txtPathText.text = "请选择文本文件";
+        }
+        
+        // 更新UI状态
+        if (pptExists && txtExists)
+        {
+            statusText.text = "已加载默认文件，可直接开始处理";
+            startButton.interactable = true;
+            
+            // 保存默认路径到数据管理器
+            dataManager.SetFileData(selectedPptPath, selectedTxtPath);
+        }
+        else
+        {
+            statusText.text = "请选择PPT文件和文本文件";
+            startButton.interactable = false;
+        }
     }
     
     // 公共方法，供其他脚本获取当前选择的文件数据

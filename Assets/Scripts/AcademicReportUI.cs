@@ -161,7 +161,7 @@ public class AcademicReportUI : MonoBehaviour
     /// </summary>
     private void UpdateUIBasedOnPodiumStatus()
     {
-        Debug.LogError($"Updating UI state: reachedPodium={hasReachedPodium}, isPresenting={isPresenting}, isQuestionPhase={isQuestionPhase}");
+        // Debug.LogError($"Updating UI state: reachedPodium={hasReachedPodium}, isPresenting={isPresenting}, isQuestionPhase={isQuestionPhase}");
         
         // 更新按键提示文本
         UpdateKeyPromptText();

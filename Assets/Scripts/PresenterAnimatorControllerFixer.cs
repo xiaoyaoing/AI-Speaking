@@ -122,7 +122,6 @@ public class PresenterAnimatorControllerFixerWindow : EditorWindow
         EditorGUILayout.Space(20);
         if (GUILayout.Button("应用修复", GUILayout.Height(40)))
         {
-            FixAnimatorController();
         }
         
         // 提示
@@ -140,66 +139,6 @@ public class PresenterAnimatorControllerFixerWindow : EditorWindow
     /// <summary>
     /// 修复Animator Controller的转换条件
     /// </summary>
-    private void FixAnimatorController()
-    {
-        // 加载现有的controller
-        AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
-        if (controller == null)
-        {
-            EditorUtility.DisplayDialog("错误", $"无法加载Animator Controller: {controllerPath}", "确定");
-            return;
-        }
-        
-        // 获取根状态机
-        AnimatorStateMachine rootStateMachine = controller.layers[0].stateMachine;
-        
-        // 确保参数存在
-        EnsureParameterExists(controller, "isWalking", AnimatorControllerParameterType.Bool);
-        EnsureParameterExists(controller, "isIdle", AnimatorControllerParameterType.Bool);
-        
-        // 查找状态
-        AnimatorState idleState = FindState(rootStateMachine, idleStateName);
-        AnimatorState walkState = FindState(rootStateMachine, walkStateName);
-        
-        if (idleState == null || walkState == null)
-        {
-            EditorUtility.DisplayDialog("错误", "无法找到所有必要的动画状态，请确保状态名称正确", "确定");
-            return;
-        }
-        
-        // 清除现有转换
-        ClearExistingTransitions(idleState);
-        ClearExistingTransitions(walkState);
-        
-        // 设置状态循环
-        SetStateToLoop(idleState);
-        SetStateToLoop(walkState);
-        
-        // 设置默认状态为idle
-        rootStateMachine.defaultState = idleState;
-        Debug.Log($"设置默认状态为: {idleStateName}");
-        
-        // 设置新的转换条件
-        // 1. 闲置 -> 行走 (当isWalking = true)
-        AnimatorStateTransition idleToWalk = idleState.AddTransition(walkState);
-        idleToWalk.AddCondition(AnimatorConditionMode.If, 0, "isWalking");
-        idleToWalk.hasExitTime = false;
-        idleToWalk.duration = transitionTime;
-        
-        // 2. 行走 -> 闲置 (当isWalking = false 且 isIdle = true)
-        AnimatorStateTransition walkToIdle = walkState.AddTransition(idleState);
-        walkToIdle.AddCondition(AnimatorConditionMode.IfNot, 0, "isWalking");
-        walkToIdle.AddCondition(AnimatorConditionMode.If, 0, "isIdle");
-        walkToIdle.hasExitTime = false;
-        walkToIdle.duration = transitionTime;
-        
-        // 保存修改
-        EditorUtility.SetDirty(controller);
-        AssetDatabase.SaveAssets();
-        AssetDatabase.Refresh();
-        
-        EditorUtility.DisplayDialog("成功", $"已成功修复Animator Controller: {controllerPath}", "确定");
-    }
     
     /// <summary>
     /// 确保参数存在

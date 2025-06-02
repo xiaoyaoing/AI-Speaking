@@ -66,7 +66,7 @@ public class SlidePlayer : MonoBehaviour
                     Quaternion.Euler(0, 0, -90), // 顺时针旋转90度
                     Vector3.one // 缩放保持不变
                 );
-                screenMaterial.SetMatrix("_BaseMap_ST", rotationMatrix);
+                // screenMaterial.SetMatrix("_BaseMap_ST", rotationMatrix);
                 
                 // 创建下一张幻灯片的材质
                 nextSlideMaterial = new Material(screenMaterial);
@@ -207,7 +207,7 @@ public class SlidePlayer : MonoBehaviour
             Quaternion.Euler(0, 0, -90), // 顺时针旋转90度
             Vector3.one // 缩放保持不变
         );
-        nextSlideMaterial.SetMatrix("_BaseMap_ST", rotationMatrix);
+        // nextSlideMaterial.SetMatrix("_BaseMap_ST", rotationMatrix);
         
         // 淡入淡出过渡
         float elapsedTime = 0f;
@@ -241,7 +241,7 @@ public class SlidePlayer : MonoBehaviour
         screenMaterial.SetColor("_BaseColor", finalColor);
         
         // 设置纹理的旋转矩阵（顺时针旋转90度）
-        screenMaterial.SetMatrix("_BaseMap_ST", rotationMatrix);
+        // screenMaterial.SetMatrix("_BaseMap_ST", rotationMatrix);
         
         // 更新第二个材质
         Material[] finalMaterials = renderer.materials;

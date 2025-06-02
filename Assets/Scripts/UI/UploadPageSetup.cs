@@ -116,6 +116,23 @@ public class UploadPageSetup : MonoBehaviour
         // 创建TXT路径文本
         GameObject txtPathObj = CreateText("未选择文件", new Vector2(0.5f, 0.1f), fileSelectObj.transform);
 
+        // 创建重新生成选项区域
+        GameObject regenerateObj = new GameObject("RegenerateOption");
+        regenerateObj.transform.SetParent(panelObj.transform, false);
+        RectTransform regenerateRect = regenerateObj.AddComponent<RectTransform>();
+        regenerateRect.anchorMin = new Vector2(0.5f, 0.3f);
+        regenerateRect.anchorMax = new Vector2(0.5f, 0.3f);
+        regenerateRect.sizeDelta = new Vector2(400, 50);
+        regenerateRect.anchoredPosition = Vector2.zero;
+
+        // 创建Toggle
+        GameObject toggleObj = CreateToggle("重新生成音频和PPT", new Vector2(0.5f, 0.5f), regenerateObj.transform);
+        Toggle regenerateToggle = toggleObj.GetComponent<Toggle>();
+        regenerateToggle.isOn = true; // 默认选中
+
+        // 获取Toggle的Label
+        Text regenerateLabel = toggleObj.GetComponentInChildren<Text>();
+
         // 创建开始按钮
         GameObject startButtonObj = CreateButton("开始", new Vector2(0.5f, 0.2f), panelObj.transform);
         Button startButton = startButtonObj.GetComponent<Button>();
@@ -145,6 +162,8 @@ public class UploadPageSetup : MonoBehaviour
         serializedObject.FindProperty("txtPathText").objectReferenceValue = txtPathObj.GetComponent<Text>();
         serializedObject.FindProperty("statusText").objectReferenceValue = statusObj.GetComponent<Text>();
         serializedObject.FindProperty("backgroundImage").objectReferenceValue = bgImage;
+        serializedObject.FindProperty("regenerateToggle").objectReferenceValue = regenerateToggle;
+        serializedObject.FindProperty("regenerateLabel").objectReferenceValue = regenerateLabel;
         
         // 使用持久化的UnityEvent绑定按钮事件
         UnityEditor.Events.UnityEventTools.AddPersistentListener(pptButton.onClick, uploadPage.SelectPptFile);
@@ -247,5 +266,67 @@ public class UploadPageSetup : MonoBehaviour
         textRect.anchoredPosition = Vector2.zero;
         
         return textObj;
+    }
+
+    private static GameObject CreateToggle(string text, Vector2 anchor, Transform parent)
+    {
+        GameObject toggleObj = new GameObject("Toggle");
+        toggleObj.transform.SetParent(parent, false);
+        
+        // 添加Toggle组件
+        Toggle toggle = toggleObj.AddComponent<Toggle>();
+        
+        // 创建背景
+        GameObject backgroundObj = new GameObject("Background");
+        backgroundObj.transform.SetParent(toggleObj.transform, false);
+        Image backgroundImage = backgroundObj.AddComponent<Image>();
+        backgroundImage.color = new Color(0.2f, 0.2f, 0.2f, 0.5f);
+        
+        RectTransform backgroundRect = backgroundObj.GetComponent<RectTransform>();
+        backgroundRect.anchorMin = new Vector2(0f, 0f);
+        backgroundRect.anchorMax = new Vector2(0f, 1f);
+        backgroundRect.sizeDelta = new Vector2(30, 0);
+        backgroundRect.anchoredPosition = new Vector2(15, 0);
+        
+        // 创建勾选标记
+        GameObject checkmarkObj = new GameObject("Checkmark");
+        checkmarkObj.transform.SetParent(backgroundObj.transform, false);
+        Image checkmarkImage = checkmarkObj.AddComponent<Image>();
+        checkmarkImage.color = new Color(0.2f, 0.8f, 0.2f, 1f);
+        
+        RectTransform checkmarkRect = checkmarkObj.GetComponent<RectTransform>();
+        checkmarkRect.anchorMin = Vector2.zero;
+        checkmarkRect.anchorMax = Vector2.one;
+        checkmarkRect.sizeDelta = new Vector2(-6, -6);
+        checkmarkRect.anchoredPosition = Vector2.zero;
+        
+        // 创建文本标签
+        GameObject textObj = new GameObject("Label");
+        textObj.transform.SetParent(toggleObj.transform, false);
+        
+        Text toggleText = textObj.AddComponent<Text>();
+        toggleText.text = text;
+        toggleText.fontSize = 20;
+        toggleText.alignment = TextAnchor.MiddleLeft;
+        toggleText.color = Color.white;
+        
+        RectTransform textRect = textObj.GetComponent<RectTransform>();
+        textRect.anchorMin = new Vector2(0f, 0f);
+        textRect.anchorMax = new Vector2(1f, 1f);
+        textRect.sizeDelta = Vector2.zero;
+        textRect.anchoredPosition = new Vector2(20, 0);
+        
+        // 设置Toggle引用
+        toggle.targetGraphic = backgroundImage;
+        toggle.graphic = checkmarkImage;
+        
+        // 设置Toggle的RectTransform
+        RectTransform toggleRect = toggleObj.GetComponent<RectTransform>();
+        toggleRect.anchorMin = anchor;
+        toggleRect.anchorMax = anchor;
+        toggleRect.sizeDelta = new Vector2(350, 30);
+        toggleRect.anchoredPosition = Vector2.zero;
+        
+        return toggleObj;
     }
 } 
