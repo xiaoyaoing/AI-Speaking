@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Citizens PRO 动画清理脚本
-只保留指定的动画文件，删除其他动画
+Citizens PRO 人物模型清理脚本
+每种类型只保留四分之一的模型，删除其他模型及对应的Prefab
 
 使用方法:
 python delete_citizens_pro.py [--dry-run]
@@ -11,9 +11,11 @@ python delete_citizens_pro.py [--dry-run]
 import os
 import shutil
 import argparse
+import random
 from pathlib import Path
+from collections import defaultdict
 
-class CitizensProAnimationCleaner:
+class CitizensProModelCleaner:
     def __init__(self, base_path, dry_run=False):
         self.base_path = Path(base_path)
         self.dry_run = dry_run
@@ -21,8 +23,8 @@ class CitizensProAnimationCleaner:
         self.kept_count = 0
         
         # 定义路径
-        self.animations_path = self.base_path / "Assets/Citizens PRO/Animations"
-        self.animations_nolegs_path = self.base_path / "Assets/Citizens PRO/Animations_NoLegs"
+        self.models_path = self.base_path / "Assets/Citizens PRO/Models"
+        self.prefabs_path = self.base_path / "Assets/Citizens PRO/People Prefabs"
         
     def delete_file_or_folder(self, path):
         """删除文件或文件夹"""
@@ -44,131 +46,178 @@ class CitizensProAnimationCleaner:
             except Exception as e:
                 print(f"删除失败 {path}: {e}")
     
-    def clean_animations(self):
-        """清理动画文件，只保留指定的动画"""
-        print("\n清理动画文件...")
+    def get_model_categories(self):
+        """扫描并分类所有人物模型"""
+        categories = defaultdict(list)
         
-        # 要保留的动画名称（不包含扩展名）
-        keep_animations = {
-            'talk1', 'talk2', 'walk', 'claphands', 'listen',
-            'talk1_f', 'talk2_f', 'walk_f', 'claphands_f', 'listen_f',
-            'idle1', 'idle2', 'idle1_f', 'idle2_f', 'sitidle', 'sitidle_f'
-        }
+        if not self.models_path.exists():
+            print(f"模型文件夹不存在: {self.models_path}")
+            return categories
         
-        # 清理 Animations_NoLegs 文件夹中的动画文件
-        self.clean_animation_folder(self.animations_nolegs_path, keep_animations)
+        print(f"扫描模型文件夹: {self.models_path}")
         
-        # 清理 Animations 文件夹中的FBX文件
-        self.clean_animation_folder(self.animations_path, keep_animations)
+        # 扫描 People 1.0 和 People 2.0 文件夹
+        for version_folder in self.models_path.iterdir():
+            if version_folder.is_dir() and version_folder.name.startswith("People"):
+                print(f"  扫描版本文件夹: {version_folder.name}")
+                
+                # 扫描性别文件夹 (Male, Female 等)
+                for gender_folder in version_folder.iterdir():
+                    if gender_folder.is_dir() and gender_folder.name in ['Male', 'Female', 'Children']:
+                        print(f"    扫描性别文件夹: {gender_folder.name}")
+                        
+                        # 扫描具体的模型文件夹
+                        for model_folder in gender_folder.iterdir():
+                            if model_folder.is_dir():
+                                # 检查是否包含模型文件
+                                fbx_files = list(model_folder.glob("*.FBX"))
+                                if fbx_files:
+                                    category_key = f"{version_folder.name}_{gender_folder.name}"
+                                    model_info = {
+                                        'path': model_folder,
+                                        'name': model_folder.name,
+                                        'category': category_key,
+                                        'version': version_folder.name,
+                                        'gender': gender_folder.name
+                                    }
+                                    categories[category_key].append(model_info)
+                                    print(f"      找到模型: {model_folder.name}")
         
-        # 删除儿童动画文件夹
-        self.clean_child_animation_folders()
+        return categories
     
-    def delete_animations_nolegs(self):
-        """删除整个 Animations_NoLegs 文件夹"""
-        if self.animations_nolegs_path.exists():
-            print(f"\n删除整个文件夹: {self.animations_nolegs_path}")
-            self.delete_file_or_folder(self.animations_nolegs_path)
-            # 删除对应的.meta文件
-            meta_file = self.animations_nolegs_path.parent / f"{self.animations_nolegs_path.name}.meta"
-            self.delete_file_or_folder(meta_file)
-        else:
-            print(f"文件夹不存在: {self.animations_nolegs_path}")
+    def find_corresponding_prefab(self, model_info):
+        """查找对应的Prefab文件"""
+        model_name = model_info['name']
+        gender = model_info['gender']
+        
+        # 在对应的性别文件夹中查找prefab
+        gender_prefab_folder = self.prefabs_path / gender
+        
+        if not gender_prefab_folder.exists():
+            return None
+        
+        # 查找匹配的prefab文件
+        for prefab_file in gender_prefab_folder.glob("*.prefab"):
+            # 检查prefab名称是否与模型名称相关
+            if model_name.lower() in prefab_file.stem.lower() or prefab_file.stem.lower() in model_name.lower():
+                return prefab_file
+        
+        # 如果没找到精确匹配，查找包含部分名称的
+        model_base_name = model_name.split('_')[0]  # 取第一部分作为基础名称
+        for prefab_file in gender_prefab_folder.glob("*.prefab"):
+            if model_base_name.lower() in prefab_file.stem.lower():
+                return prefab_file
+        
+        return None
     
-    def clean_animation_folder(self, folder_path, keep_animations):
-        """清理指定动画文件夹中的动画文件"""
-        if not folder_path.exists():
-            print(f"动画文件夹不存在: {folder_path}")
+    def clean_models(self):
+        """清理模型文件，每种类型只保留四分之一"""
+        print("\n开始清理人物模型...")
+        
+        categories = self.get_model_categories()
+        
+        if not categories:
+            print("没有找到任何模型分类")
             return
         
-        print(f"\n处理动画文件夹: {folder_path.name}")
+        print(f"\n找到 {len(categories)} 个模型分类:")
+        for category, models in categories.items():
+            print(f"  {category}: {len(models)} 个模型")
         
-        # 遍历所有子文件夹（Man, Girl no Heel, Girl with Heel等）
-        for subfolder in folder_path.iterdir():
-            if subfolder.is_dir() and subfolder.name not in ['Child Man', 'Child Girl']:
-                print(f"  处理子文件夹: {subfolder.name}")
+        # 对每个分类进行处理
+        for category, models in categories.items():
+            print(f"\n处理分类: {category}")
+            print(f"  总共 {len(models)} 个模型")
+            
+            if len(models) <= 1:
+                print(f"  该分类模型数量过少，全部保留")
+                self.kept_count += len(models)
+                continue
+            
+            # 计算要保留的数量（至少保留1个）
+            keep_count = max(1, len(models) // 4)
+            print(f"  将保留 {keep_count} 个模型，删除 {len(models) - keep_count} 个模型")
+            
+            # 随机选择要保留的模型
+            random.shuffle(models)
+            models_to_keep = models[:keep_count]
+            models_to_delete = models[keep_count:]
+            
+            # 删除不需要的模型
+            for model_info in models_to_delete:
+                print(f"    [删除] {model_info['name']}")
                 
-                # 根据文件夹类型处理不同的文件格式
-                if folder_path.name == "Animations_NoLegs":
-                    # Animations_NoLegs 文件夹包含 .anim 文件
-                    anim_files = list(subfolder.glob("*.anim"))
-                    print(f"    找到 {len(anim_files)} 个ANIM文件")
-                    
-                    if not anim_files:
-                        print(f"    该文件夹中没有ANIM文件")
-                        continue
-                    
-                    for anim_file in anim_files:
-                        animation_name = anim_file.stem  # 获取不带扩展名的文件名
-                        
-                        if animation_name not in keep_animations:
-                            print(f"    [删除动画] {animation_name}")
-                            # 删除ANIM文件
-                            self.delete_file_or_folder(anim_file)
-                            # 删除对应的.meta文件
-                            meta_file = subfolder / f"{anim_file.name}.meta"
-                            self.delete_file_or_folder(meta_file)
-                        else:
-                            print(f"    [保留动画] {animation_name}")
-                            self.kept_count += 1
+                # 删除模型文件夹
+                self.delete_file_or_folder(model_info['path'])
+                
+                # 删除对应的.meta文件
+                meta_file = model_info['path'].parent / f"{model_info['path'].name}.meta"
+                self.delete_file_or_folder(meta_file)
+                
+                # 查找并删除对应的prefab
+                prefab_file = self.find_corresponding_prefab(model_info)
+                if prefab_file:
+                    print(f"      删除对应的Prefab: {prefab_file.name}")
+                    self.delete_file_or_folder(prefab_file)
+                    # 删除prefab的.meta文件
+                    prefab_meta = prefab_file.parent / f"{prefab_file.name}.meta"
+                    self.delete_file_or_folder(prefab_meta)
                 else:
-                    # Animations 文件夹包含 .FBX 文件
-                    fbx_files = list(subfolder.glob("*.FBX"))
-                    print(f"    找到 {len(fbx_files)} 个FBX文件")
-                    
-                    if not fbx_files:
-                        print(f"    该文件夹中没有FBX文件")
-                        continue
-                    
-                    for fbx_file in fbx_files:
-                        animation_name = fbx_file.stem  # 获取不带扩展名的文件名
-                        
-                        if animation_name not in keep_animations:
-                            print(f"    [删除动画] {animation_name}")
-                            # 删除FBX文件
-                            self.delete_file_or_folder(fbx_file)
-                            # 删除对应的.meta文件
-                            meta_file = subfolder / f"{fbx_file.name}.meta"
-                            self.delete_file_or_folder(meta_file)
-                        else:
-                            print(f"    [保留动画] {animation_name}")
-                            self.kept_count += 1
+                    print(f"      未找到对应的Prefab文件")
+            
+            # 统计保留的模型
+            for model_info in models_to_keep:
+                print(f"    [保留] {model_info['name']}")
+                self.kept_count += 1
     
-    def clean_child_animation_folders(self):
-        """删除儿童动画文件夹"""
-        child_folders = ['Child Man', 'Child Girl']
+    def clean_empty_folders(self):
+        """清理空文件夹"""
+        print("\n清理空文件夹...")
         
-        # 删除 Animations 文件夹中的儿童动画
-        if self.animations_path.exists():
-            for child_folder_name in child_folders:
-                child_folder = self.animations_path / child_folder_name
-                if child_folder.exists():
-                    print(f"\n删除儿童动画文件夹: {child_folder}")
-                    self.delete_file_or_folder(child_folder)
-                    # 删除对应的.meta文件
-                    meta_file = self.animations_path / f"{child_folder_name}.meta"
-                    self.delete_file_or_folder(meta_file)
+        def remove_empty_folders(path):
+            """递归删除空文件夹"""
+            if not path.exists() or not path.is_dir():
+                return
+            
+            # 先处理子文件夹
+            for subfolder in path.iterdir():
+                if subfolder.is_dir():
+                    remove_empty_folders(subfolder)
+            
+            # 检查当前文件夹是否为空（只包含.meta文件也算空）
+            contents = list(path.iterdir())
+            non_meta_contents = [item for item in contents if not item.name.endswith('.meta')]
+            
+            if not non_meta_contents:
+                print(f"删除空文件夹: {path}")
+                self.delete_file_or_folder(path)
+                # 删除对应的.meta文件
+                meta_file = path.parent / f"{path.name}.meta"
+                self.delete_file_or_folder(meta_file)
         
-        # 删除 Animations_NoLegs 文件夹中的儿童动画
-        if self.animations_nolegs_path.exists():
-            for child_folder_name in child_folders:
-                child_folder = self.animations_nolegs_path / child_folder_name
-                if child_folder.exists():
-                    print(f"\n删除儿童动画文件夹: {child_folder}")
-                    self.delete_file_or_folder(child_folder)
-                    # 删除对应的.meta文件
-                    meta_file = self.animations_nolegs_path / f"{child_folder_name}.meta"
-                    self.delete_file_or_folder(meta_file)
+        # 清理模型文件夹中的空文件夹
+        if self.models_path.exists():
+            remove_empty_folders(self.models_path)
+        
+        # 清理prefab文件夹中的空文件夹
+        if self.prefabs_path.exists():
+            remove_empty_folders(self.prefabs_path)
 
     def run(self):
         """执行清理"""
-        print(f"Citizens PRO 动画清理工具")
+        print(f"Citizens PRO 人物模型清理工具")
         print(f"基础路径: {self.base_path}")
         print(f"模式: {'预览模式' if self.dry_run else '实际删除'}")
         print("=" * 50)
         
-        # 清理动画
-        self.clean_animations()
+        # 设置随机种子以确保结果可重现
+        random.seed(42)
+        
+        # 清理模型
+        self.clean_models()
+        
+        # 清理空文件夹
+        self.clean_empty_folders()
         
         print("\n" + "=" * 50)
         print(f"清理完成!")
@@ -180,7 +229,7 @@ class CitizensProAnimationCleaner:
             print("要执行实际删除，请运行: python delete_citizens_pro.py")
 
 def main():
-    parser = argparse.ArgumentParser(description='Citizens PRO 动画清理工具')
+    parser = argparse.ArgumentParser(description='Citizens PRO 人物模型清理工具')
     parser.add_argument('--dry-run', action='store_true', 
                        help='预览模式，不实际删除文件')
     parser.add_argument('--base-path', type=str, default='.',
@@ -200,7 +249,7 @@ def main():
         return
     
     # 执行清理
-    cleaner = CitizensProAnimationCleaner(base_path, args.dry_run)
+    cleaner = CitizensProModelCleaner(base_path, args.dry_run)
     cleaner.run()
 
 if __name__ == "__main__":
